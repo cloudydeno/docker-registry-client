@@ -4,16 +4,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+import { RegistryImage, RegistryIndex } from "./types.ts";
+
 /*
  * Copyright 2016 Joyent, Inc.
  */
-
-// var assert = require('assert-plus');
-// var fmt = require('util').format;
-// var os = require('os');
-// var strsplit = require('strsplit');
-
-
 
 // --- globals
 
@@ -26,19 +21,18 @@ export const DEFAULT_USERAGENT = 'deno-docker-registry-client/' + '0.1.0' +
 'deno/' + Deno.version + ')';
 
 // See `INDEXNAME` in docker/docker.git:registry/config.go.
-var DEFAULT_INDEX_NAME = 'docker.io';
-var DEFAULT_INDEX_URL = 'https://index.docker.io';
+export const DEFAULT_INDEX_NAME = 'docker.io';
+export const DEFAULT_INDEX_URL = 'https://index.docker.io';
 
-var DEFAULT_LOGIN_SERVERNAME = 'https://index.docker.io/v1/';
+export const DEFAULT_LOGIN_SERVERNAME = 'https://index.docker.io/v1/';
 
 
 // JSSTYLED
 // 'DEFAULTTAG' from https://github.com/docker/docker/blob/0c7b51089c8cd7ef3510a9b40edaa139a7ca91aa/graph/tags.go#L25
-var DEFAULT_TAG = 'latest';
+export const DEFAULT_TAG = 'latest';
 
 var VALID_NS = /^[a-z0-9\._-]*$/;
 var VALID_REPO = /^[a-z0-9_\/\.-]*$/;
-
 
 
 // --- exports
@@ -48,12 +42,6 @@ export function splitIntoTwo(str: string, sep: string) {
     return slashIdx == -1
         ? [str]
         : [str.slice(0, slashIdx), str.slice(slashIdx+1)];
-}
-
-export interface RegistryIndex {
-    name: string;
-    official?: boolean;
-    scheme: string;
 }
 
 /**
@@ -76,7 +64,7 @@ export interface RegistryIndex {
 export function parseIndex(arg?: string) {
     // assert.optionalString(arg, 'arg');
 
-    var index: RegistryIndex = {} as RegistryIndex;
+    var index = {} as RegistryIndex;
 
     if (!arg || arg === DEFAULT_LOGIN_SERVERNAME) {
         // Default index.
@@ -136,16 +124,6 @@ export function parseIndex(arg?: string) {
     return index;
 }
 
-
-export interface RegistryImage {
-    index: RegistryIndex;
-    remoteName?: string;
-    localName?: string;
-    canonicalName?: string;
-    official?: boolean;
-    digest?: string;
-    tag?: string;
-}
 
 /**
  * Parse a docker repo and tag string: [INDEX/]REPO[:TAG|@DIGEST]
@@ -447,22 +425,3 @@ export function isLocalhost(host: string) {
 //             stream.emit('end');
 //     };
 // }
-
-
-// module.exports = {
-//     DEFAULT_USERAGENT: DEFAULT_USERAGENT,
-
-//     DEFAULT_INDEX_NAME: DEFAULT_INDEX_NAME,
-//     DEFAULT_TAG: DEFAULT_TAG,
-//     parseIndex: parseIndex,
-//     parseRepo: parseRepo,
-//     parseRepoAndRef: parseRepoAndRef,
-//     parseRepoAndTag: parseRepoAndTag,
-//     urlFromIndex: urlFromIndex,
-
-//     isLocalhost: isLocalhost,
-//     objCopy: objCopy,
-//     deepObjCopy: deepObjCopy,
-//     objMerge: objMerge,
-//     pauseStream: pauseStream
-// };

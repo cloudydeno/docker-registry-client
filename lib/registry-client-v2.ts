@@ -6,7 +6,17 @@
 
 import { Sha256 } from "https://deno.land/std@0.92.0/hash/sha256.ts";
 
-import { RegistryIndex, parseRepo, RegistryImage, deepObjCopy, isLocalhost, urlFromIndex, DEFAULT_USERAGENT, parseIndex } from "./common.ts";
+import {
+    parseIndex, parseRepo,
+    deepObjCopy,
+    isLocalhost,
+    urlFromIndex,
+    DEFAULT_USERAGENT,
+} from "./common.ts";
+import {
+    Manifest,
+    RegistryIndex, RegistryImage,
+} from "./types.ts";
 import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
 
@@ -332,8 +342,8 @@ async function _getToken(opts: {
     if (resp.status === 401) {
         // Convert *all* 401 errors to use a generic error constructor
         // with a simple error message.
-        var errMsg = _getRegistryErrorMessage(resp);
-        throw new Error(errMsg);
+        var errMsg = _getRegistryErrorMessage(await resp.dockerJson());
+        throw new Error('Registry 401 - Auth failed: '+errMsg);
     }
     const body = await resp.json();
     if (typeof body.token !== 'string') {
@@ -1191,140 +1201,107 @@ export class RegistryClientV2 {
         return await res.dockerJson();
     };
 
-// /*
-//  * Get an image manifest. `ref` is either a tag or a digest.
-//  * <https://docs.docker.com/registry/spec/api/#pulling-an-image-manifest>
-//  *
-//  *   client.getManifest({ref: <tag or digest>}, function (err, manifest, res,
-//  *      manifestStr) {
-//  *      // Use `manifest` and digest is `res.headers['docker-content-digest']`.
-//  *      // Note that docker-content-digest header can be undefined, so if you
-//  *      // need a manifest digest, use the `digestFromManifestStr` function.
-//  *   });
-//  */
-// getManifest(opts: {
-//     ref: string;
-//     acceptManifestLists?: boolean;
-//     maxSchemaVersion?: number;
-//     followRedirects?: boolean;
-// }) {
-//     var acceptManifestLists = opts.acceptManifestLists;
-//     if (typeof (acceptManifestLists) === 'undefined') {
-//         acceptManifestLists = this.acceptManifestLists;
-//     }
-//     var maxSchemaVersion = (opts.maxSchemaVersion || this.maxSchemaVersion);
-//     var res, manifest, manifestStr;
+    /*
+    * Get an image manifest. `ref` is either a tag or a digest.
+    * <https://docs.docker.com/registry/spec/api/#pulling-an-image-manifest>
+    *
+    *   client.getManifest({ref: <tag or digest>}, function (err, manifest, res,
+    *      manifestStr) {
+    *      // Use `manifest` and digest is `res.headers['docker-content-digest']`.
+    *      // Note that docker-content-digest header can be undefined, so if you
+    *      // need a manifest digest, use the `digestFromManifestStr` function.
+    *   });
+    */
+    async getManifest(opts: {
+        ref: string;
+        acceptManifestLists?: boolean;
+        maxSchemaVersion?: number;
+        followRedirects?: boolean;
+    }) {
+        var acceptManifestLists = opts.acceptManifestLists
+            ?? this.acceptManifestLists;
+        var maxSchemaVersion = opts.maxSchemaVersion
+            ?? this.maxSchemaVersion;
 
-//     await this.login();
-//     var headers = this._headers;
-//     if (maxSchemaVersion === 2) {
-//         var accept = [];
-//         if (this._headers.accept) {
-//             // Accept may be a string or an array - we want an array.
-//             if (Array.isArray(this._headers.accept)) {
-//                 accept = this._headers.accept.slice(); // a copy
-//             } else {
-//                 accept = [this._headers.accept];
-//             }
-//         }
-//         accept.push(MEDIATYPE_MANIFEST_V2);
-//         if (acceptManifestLists) {
-//             accept.push(MEDIATYPE_MANIFEST_LIST_V2);
-//         }
-//         headers = common.objMerge({}, this._headers, {accept: accept});
-//     }
-//     var requestOpts = {
-//         method: 'get',
-//         url: this._url,
-//         path: fmt('/v2/%s/manifests/%s',
-//             encodeURI(this.repo.remoteName),
-//             encodeURI(opts.ref)),
-//         headers: headers
-//     };
-//     if (opts.hasOwnProperty('followRedirects')) {
-//         requestOpts.followRedirects = opts.followRedirects;
-//     }
+        await this.login();
+        var headers = new Headers(this._headers);
+        if (maxSchemaVersion === 2) {
+            const accept = this._headers.get('accept')?.split(', ') ?? [];
+            accept.push(MEDIATYPE_MANIFEST_V2);
+            if (acceptManifestLists) {
+                accept.push(MEDIATYPE_MANIFEST_LIST_V2);
+            }
+            headers.set('accept', accept.join(', '));
+        }
 
-//     this._makeJsonRequest(requestOpts)
+        const resp = await this._api.get({
+            path: `/v2/${encodeURI(this.repo.remoteName ?? '')}/manifests/${encodeURI(opts.ref)}`,
+            headers: headers,
+            redirect: opts.followRedirects ? 'follow' : 'error',
+        }).catch(err => {
+            if (err.resp?.status === 401) {
+                // Convert into a 404 error.
+                // If we get an Unauthorized error here, it actually
+                // means the repo does not exist, otherwise we should
+                // have received an unauthorized error during the
+                // doLogin step and this code path would not be taken.
+                var errMsg = _getRegistryErrorMessage(err);
+                throw new Error(`Docker registry 401 Not Found: ${errMsg}`);
+            }
+            throw err;
+        });
 
-//     if (err) {
-//         if (err.statusCode === 401) {
-//             // Convert into a 404 error.
-//             // If we get an Unauthorized error here, it actually
-//             // means the repo does not exist, otherwise we should
-//             // have received an unauthorized error during the
-//             // doLogin step and this code path would not be taken.
-//             var errMsg = _getRegistryErrorMessage(err);
-//             return next(new restifyErrors.makeErrFromCode(404,
-//                 {message: errMsg}));
-//         }
+        const manifest = await resp.dockerJson() as Manifest;
 
-//         return next(err);
-//     }
+        if (manifest.schemaVersion === 1) {
+            // TODO
+            // var jws = _jwsFromManifest(manifest, body);
+            // // Some v2 registries (Amazon ECR) do not provide the
+            // // 'docker-content-digest' header.
+            // if (resp.headers.has('docker-content-digest')) {
+            //     _verifyManifestDockerContentDigest(resp, jws);
+            // } else {
+            //     // this.log.debug({headers: resp.headers},
+            //     //     'no Docker-Content-Digest header on ' +
+            //     //     'getManifest response');
+            // }
+            // _verifyJws(jws);
+        }
 
-//     manifest = manifest_;
-//     manifestStr = String(body);
+        if (manifest.schemaVersion > maxSchemaVersion) {
+            throw new Error(
+                `unsupported schema version ${manifest.schemaVersion
+                } in ${this.repo.localName}:${opts.ref} manifest`);
+        }
 
-//     if (manifest.schemaVersion === 1) {
-//         try {
-//             var jws = _jwsFromManifest(manifest, body);
-//             // Some v2 registries (Amazon ECR) do not provide the
-//             // 'docker-content-digest' header.
-//             if (res_.headers['docker-content-digest']) {
-//                 _verifyManifestDockerContentDigest(res_, jws);
-//             } else {
-//                 this.log.debug({headers: res_.headers},
-//                     'no Docker-Content-Digest header on ' +
-//                     'getManifest response');
-//             }
-//             _verifyJws(jws);
-//         } catch (verifyErr) {
-//             return next(verifyErr);
-//         }
-//     }
+        // Verify the manifest contents.
+        if (manifest.mediaType === MEDIATYPE_MANIFEST_LIST_V2) {
+            if (!Array.isArray(manifest.manifests) ||
+                    manifest.manifests.length === 0) {
+                throw new Error(
+                    `no manifests in ${this.repo.localName}:${opts.ref} manifest list`);
+            }
+        } else {
+            var layers: Array<unknown> | undefined = manifest.fsLayers;
+            if (manifest.schemaVersion === 1) {
+                if (layers!.length !== manifest.history!.length) {
+                    throw new Error(
+                        'history length not equal to layers length in '
+                        + `${this.repo.localName}:${opts.ref} manifest`);
+                }
+            } else if (manifest.schemaVersion === 2) {
+                layers = manifest.layers;
+            }
+            if (!layers || layers.length === 0) {
+                throw new Error(
+                    `no layers in ${this.repo.localName}:${opts.ref} manifest`);
+            }
+        }
 
-//     if (manifest.schemaVersion > maxSchemaVersion) {
-//         cb(new restifyErrors.InvalidContentError(fmt(
-//             'unsupported schema version %s in %s:%s manifest',
-//             manifest.schemaVersion, this.repo.localName,
-//             opts.ref)));
-//         return;
-//     }
-
-//     // Verify the manifest contents.
-//     if (manifest.mediaType === MEDIATYPE_MANIFEST_LIST_V2) {
-//         if (!Array.isArray(manifest.manifests) ||
-//                 manifest.manifests.length === 0) {
-//             cb(new restifyErrors.InvalidContentError(fmt(
-//                 'no manifests in %s:%s manifest list',
-//                 this.repo.localName, opts.ref)));
-//             return;
-//         }
-//     } else {
-//         var layers = manifest.fsLayers;
-//         if (manifest.schemaVersion === 1) {
-//             if (layers.length !== manifest.history.length) {
-//                 cb(new restifyErrors.InvalidContentError(fmt(
-//                     'history length not equal to layers length in '
-//                     + '%s:%s manifest',
-//                     this.repo.localName, opts.ref)));
-//                 return;
-//             }
-//         } else if (manifest.schemaVersion === 2) {
-//             layers = manifest.layers;
-//         }
-//         if (!layers || layers.length === 0) {
-//             cb(new restifyErrors.InvalidContentError(fmt(
-//                 'no layers in %s:%s manifest', this.repo.localName,
-//                 opts.ref)));
-//             return;
-//         }
-//     }
-
-//     // TODO: `verifyTrustedKeys` from
-//     // docker/graph/pull_v2.go#validateManifest()
-
-// };
+        // TODO: `verifyTrustedKeys` from
+        // docker/graph/pull_v2.go#validateManifest()
+        return {resp, manifest};
+    };
 
 
 // /**

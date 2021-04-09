@@ -41,16 +41,6 @@
  *    ... as an accident of history I'm guessing?
  */
 
-// var assert = require('assert-plus');
-// var crypto = require('crypto');
-// var restifyClients = require('restify-clients');
-// var restifyErrors = require('restify-errors');
-// var strsplit = require('strsplit').strsplit;
-// var util = require('util');
-// var zlib = require('zlib');
-
-// var StringClient = restifyClients.StringClient;
-
 import { Md5 } from "https://deno.land/std@0.92.0/hash/md5.ts";
 import { gunzip } from "https://deno.land/x/compress@v0.3.7/gzip/gzip.ts";
 import * as Base64 from "https://deno.land/std@0.92.0/encoding/base64.ts";
@@ -64,59 +54,55 @@ export class DockerJsonClient {
     url: string;
     userAgent: string;
 
-  constructor(options: {
-    name?: string;
-    accept?: string;
-    contentType?: string;
-    url: string;
-    rejectUnauthorized?: boolean;
-    userAgent: string;
-  }) {
-    this.accept = options.accept || 'application/json';
-    this.name = options.name || 'DockerJsonClient';
-    this.contentType = options.contentType || 'application/json';
-    this.url = options.url;
-    // this.rejectUnauthorized = options.rejectUnauthorized;
-    this.userAgent = options.userAgent;
-  }
-
-  async get(opts: {
-    path: string,
-    headers?: Headers,
-    retry?: boolean,
-    connectTimeout?: number,
-    expectStatus?: number[],
-  }) {
-    const headers = new Headers(opts.headers);
-    headers.set('accept', this.accept);
-    headers.set('user-agent', this.userAgent);
-
-    const rawResp = await fetch(new URL(opts.path, this.url), {
-        method: 'GET',
-        headers: headers,
-    });
-    const resp = new DockerResponse(rawResp.body, rawResp);
-
-    const expectStatus = opts.expectStatus ?? [200];
-    if (!expectStatus.includes(rawResp.status)) {
-        throw await resp.dockerError(`Received unexpected HTTP ${rawResp.status} from ${opts.path}`);
+    constructor(options: {
+        name?: string;
+        accept?: string;
+        contentType?: string;
+        url: string;
+        rejectUnauthorized?: boolean;
+        userAgent: string;
+    }) {
+        this.accept = options.accept || 'application/json';
+        this.name = options.name || 'DockerJsonClient';
+        this.contentType = options.contentType || 'application/json';
+        this.url = options.url;
+        // this.rejectUnauthorized = options.rejectUnauthorized;
+        this.userAgent = options.userAgent;
     }
-    return resp;
-  }
 
-//   write(options, body, callback) {
-//     assert.object(body, 'body');
+    async get(opts: {
+        path: string,
+        headers?: Headers,
+        retry?: boolean,
+        connectTimeout?: number,
+        expectStatus?: number[],
+        redirect?: RequestRedirect,
+    }) {
+        const headers = new Headers(opts.headers);
+        if (!headers.has('accept')) {
+            headers.set('accept', this.accept);
+        }
+        headers.set('user-agent', this.userAgent);
 
-//     // This is change #3.
-//     var resBody = JSON.stringify(body);
-//     return (this._super.write.call(this, options, resBody, callback));
-//   };
+        const rawResp = await fetch(new URL(opts.path, this.url), {
+            method: 'GET',
+            headers: headers,
+            redirect: opts.redirect ?? 'error',
+        });
+        const resp = new DockerResponse(rawResp.body, rawResp);
+
+        const expectStatus = opts.expectStatus ?? [200];
+        if (!expectStatus.includes(rawResp.status)) {
+            throw await resp.dockerError(`Received unexpected HTTP ${rawResp.status} from ${opts.path}`);
+        }
+        return resp;
+    }
 
 };
 
 
 export class DockerResponse extends Response {
-
+    // Cache the body once we decode it once.
     decodedBody?: Uint8Array;
 
     async dockerBody() {
@@ -194,8 +180,15 @@ export class DockerResponse extends Response {
             }
         }
 
-        console.log(new TextDecoder().decode(await this.dockerBody()).slice(0, 4096));
-        const err = new Error(`${baseMsg}: ${message || new TextDecoder().decode(await this.dockerBody()).slice(0, 4096)}`);
+        if (!message) {
+            if (this.headers.get('content-type')?.startsWith('text/html')) {
+                message = '(HTML body)';
+            } else {
+                message = new TextDecoder().decode(await this.dockerBody()).slice(0, 1024);
+            }
+        }
+
+        const err = new Error(`${baseMsg}: ${message}`);
         (err as any).resp = this;
         (err as any).restCode = restCode;
         (err as any).restText = restText;

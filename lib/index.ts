@@ -8,7 +8,7 @@
  * Copyright 2016 Joyent, Inc.
  */
 
-import { RegistryImage, RegistryIndex } from "./common.ts";
+import { RegistryImage, RegistryIndex } from "./types.ts";
 // import * as reg1 from './registry-client-v1.ts';
 import * as reg2 from './registry-client-v2.ts';
 
@@ -119,10 +119,6 @@ export async function login(opts: {
 
 // --- exports
 
-// module.exports = {
-//     createClient: createClient,
-//     login: login,
-
 //     createClientV2: reg2.createClient,
 //     pingV2: reg2.ping,
 //     loginV2: reg2.login,
@@ -141,4 +137,3 @@ export async function login(opts: {
 //     parseRepoAndRef: common.parseRepoAndRef,
 //     // Using `parseRepoAndRef` is preferred over `parseRepoAndTag`.
 //     parseRepoAndTag: common.parseRepoAndTag
-// };

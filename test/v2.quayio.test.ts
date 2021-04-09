@@ -8,9 +8,11 @@
  * Copyright (c) 2017, Joyent, Inc.
  */
 
-import { assertEquals, assert } from "https://deno.land/std@0.92.0/testing/asserts.ts";
+import { assertEquals, assert, assertThrowsAsync } from "https://deno.land/std@0.92.0/testing/asserts.ts";
 import { createClient } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
+import { Manifest } from "../lib/types.ts";
+import { dirname } from "https://deno.land/std@0.92.0/path/posix.ts";
 
 // --- globals
 
@@ -74,86 +76,64 @@ Deno.test('v2 quay.io / listTags', async () => {
     *      "signature": <JWS>
     *  }
     */
-// var manifest;
-// var manifestDigest;
-// Deno.test('v2 quay.io / getManifest', async () => {
-//     const client = createClient({ repo });
-//     client.getManifest({ref: TAG}, function (err, manifest_, res) {
-//         t.ifErr(err);
-//         manifest = manifest_;
-//         manifestDigest = res.headers['docker-content-digest'];
-//         t.ok(manifest);
-//         assertEquals(manifest.schemaVersion, 1);
-//         assertEquals(manifest.name, repo.remoteName);
-//         assertEquals(manifest.tag, TAG);
-//         t.ok(manifest.architecture);
-//         t.ok(manifest.fsLayers);
-//         t.ok(manifest.history[0].v1Compatibility);
-//         t.ok(manifest.signatures[0].signature);
-//         t.end();
-//     });
-// });
+let _manifest: Manifest | null;
+let _manifestDigest: string | null;
+Deno.test('v2 quay.io / getManifest', async () => {
+    const client = createClient({ repo });
+    const {manifest, resp} = await client.getManifest({ref: TAG});
+    _manifest = manifest;
+    _manifestDigest = resp.headers.get('docker-content-digest');
+    assert(manifest);
+    assertEquals(manifest.schemaVersion, 1);
+    assertEquals(manifest.name, repo.remoteName);
+    assertEquals(manifest.tag, TAG);
+    assert(manifest.architecture);
+    assert(manifest.fsLayers);
+    assert(manifest.history?.[0].v1Compatibility);
+    assert(manifest.signatures?.[0].signature);
+});
 
-// Deno.test('v2 quay.io / getManifest (by digest)', async () => {
-//     const client = createClient({ repo });
-//     client.getManifest({ref: manifestDigest}, function (err, manifest_) {
-//         t.ifErr(err);
-//         t.ok(manifest);
-//         ['schemaVersion',
-//          'name',
-//          'tag',
-//          'architecture'].forEach(function (k) {
-//             assertEquals(manifest_[k], manifest[k], k);
-//         });
-//         t.end();
-//     });
-// });
+Deno.test('v2 quay.io / getManifest (by digest)', async () => {
+    if (!_manifestDigest || !_manifest) throw new Error('cannot test');
+    const client = createClient({ repo });
+    const {manifest} = await client.getManifest({ref: _manifestDigest});
+    assert(manifest);
+    assertEquals(_manifest!.schemaVersion, manifest.schemaVersion);
+    assertEquals(_manifest!.name, manifest.name);
+    assertEquals(_manifest!.tag, manifest.tag);
+    assertEquals(_manifest!.architecture, manifest.architecture);
+});
 
-// Deno.test('v2 quay.io / getManifest (unknown tag)', async () => {
-//     const client = createClient({ repo });
-//     client.getManifest({ref: 'unknowntag'}, function (err, manifest_) {
-//         t.ok(err);
-//         t.notOk(manifest_);
-//         assertEquals(err.statusCode, 404);
-//         t.end();
-//     });
-// });
+Deno.test('v2 quay.io / getManifest (unknown tag)', async () => {
+    const client = createClient({ repo });
+    await assertThrowsAsync(async () => {
+        await client.getManifest({ref: 'unknowntag'});
+    }, Error, ' 404 ');
+});
 
-// Deno.test('v2 quay.io / getManifest (unknown repo)', async () => {
-//     const client = createClient({ repo });
-//     var badRepoClient = drc.createClientV2({
-//         maxSchemaVersion: 2,
-//         name: path.dirname(REPO) + '/unknownreponame',
-//         log: log
-//     });
-//     t.ok(badRepoClient);
-//     badRepoClient.getManifest({ref: 'latest'}, function (err, manifest_) {
-//         t.ok(err, 'Expected an error on a missing repo');
-//         t.notOk(manifest_);
-//         assertEquals(err.statusCode, 404);
-//         badRepoClient.close();
-//         t.end();
-//     });
-// });
+Deno.test('v2 quay.io / getManifest (unknown repo)', async () => {
+    const client = createClient({
+        maxSchemaVersion: 2,
+        name: dirname(REPO) + '/unknownreponame',
+        // log: log
+    });
+    await assertThrowsAsync(async () => {
+        await client.getManifest({ref: 'latest'});
+    }, Error, 'Not Found');
+});
 
-// Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
-//     const client = createClient({ repo });
-//     var badUserClient = drc.createClientV2({
-//         maxSchemaVersion: 2,
-//         repo,
-//         username: 'fredNoExistHere',
-//         password: 'fredForgot',
-//         log: log
-//     });
-//     t.ok(badUserClient);
-//     badUserClient.getManifest({ref: 'latest'}, function (err, manifest_) {
-//         t.ok(err, 'Expected an error on a missing repo');
-//         t.notOk(manifest_);
-//         assertEquals(err.statusCode, 401);
-//         badUserClient.close();
-//         t.end();
-//     });
-// });
+Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
+    const client = createClient({
+        maxSchemaVersion: 2,
+        repo,
+        username: 'fredNoExistHere',
+        password: 'fredForgot',
+        // log: log
+    });
+    await assertThrowsAsync(async () => {
+        await client.getManifest({ref: 'latest'});
+    }, Error, ' 401 ');
+});
 
 // Deno.test('v2 quay.io / headBlob', async () => {
 //     const client = createClient({ repo });

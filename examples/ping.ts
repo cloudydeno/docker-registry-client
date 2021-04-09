@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --no-check --allow-net=localhost
+#!/usr/bin/env -S deno run --allow-net
 
 /*
  * This Source Code Form is subject to the terms of the Mozilla Public

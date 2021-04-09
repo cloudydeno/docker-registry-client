@@ -8,19 +8,22 @@
  * Copyright 2016 Joyent, Inc.
  */
 
-var assert = require('assert-plus');
-var fmt = require('util').format;
-var os = require('os');
-var strsplit = require('strsplit');
+// var assert = require('assert-plus');
+// var fmt = require('util').format;
+// var os = require('os');
+// var strsplit = require('strsplit');
 
 
 
 // --- globals
 
-var VERSION = require('../package.json').version;
-var DEFAULT_USERAGENT = 'node-docker-registry-client/' + VERSION +
-    ' (' + os.arch() + '-' + os.platform() + '; ' +
-   'node/' + process.versions.node + ')';
+// var VERSION = require('../package.json').version;
+// var DEFAULT_USERAGENT = 'node-docker-registry-client/' + VERSION +
+//     ' (' + os.arch() + '-' + os.platform() + '; ' +
+//    'node/' + process.versions.node + ')';
+export const DEFAULT_USERAGENT = 'deno-docker-registry-client/' + '0.1.0' +
+' (+'+import.meta.url+'; ' +
+'deno/' + Deno.version + ')';
 
 // See `INDEXNAME` in docker/docker.git:registry/config.go.
 var DEFAULT_INDEX_NAME = 'docker.io';
@@ -40,6 +43,19 @@ var VALID_REPO = /^[a-z0-9_\/\.-]*$/;
 
 // --- exports
 
+export function splitIntoTwo(str: string, sep: string) {
+    const slashIdx = str.indexOf(sep)
+    return slashIdx == -1
+        ? [str]
+        : [str.slice(0, slashIdx), str.slice(slashIdx+1)];
+}
+
+export interface RegistryIndex {
+    name: string;
+    official?: boolean;
+    scheme: string;
+}
+
 /**
  * Parse a docker index name or index URL.
  *
@@ -57,10 +73,10 @@ var VALID_REPO = /^[a-z0-9_\/\.-]*$/;
  *
  * @param {String} arg: Optional. Index name (optionally with leading scheme).
  */
-function parseIndex(arg) {
-    assert.optionalString(arg, 'arg');
+export function parseIndex(arg?: string) {
+    // assert.optionalString(arg, 'arg');
 
-    var index = {};
+    var index: RegistryIndex = {} as RegistryIndex;
 
     if (!arg || arg === DEFAULT_LOGIN_SERVERNAME) {
         // Default index.
@@ -88,8 +104,7 @@ function parseIndex(arg) {
             indexName.indexOf(':') === -1 &&
             indexName !== 'localhost')
         {
-            throw new Error(fmt('invalid index, "%s" does not look like a ' +
-                'valid host: %s', indexName, arg));
+            throw new Error(`invalid index, "${indexName}" does not look like a valid host: ${arg}`);
         } else {
             // Allow a trailing '/' as from some URL builder functions that
             // add a default '/' path to a URL, e.g. 'https://docker.io/'.
@@ -122,6 +137,16 @@ function parseIndex(arg) {
 }
 
 
+export interface RegistryImage {
+    index: RegistryIndex;
+    remoteName?: string;
+    localName?: string;
+    canonicalName?: string;
+    official?: boolean;
+    digest?: string;
+    tag?: string;
+}
+
 /**
  * Parse a docker repo and tag string: [INDEX/]REPO[:TAG|@DIGEST]
  *
@@ -148,8 +173,8 @@ function parseIndex(arg) {
  *      If given it may either be a string, e.g. 'https://myreg.example.com',
  *      or parsed index object, as from `parseIndex()`.
  */
-function parseRepo(arg, defaultIndex) {
-    var info = {};
+export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex) {
+    var info = {} as RegistryImage;
 
     // Strip off optional leading `INDEX/`, parse it to `info.index` and
     // leave the rest in `remoteName`.
@@ -166,7 +191,7 @@ function parseRepo(arg, defaultIndex) {
         remoteName = arg.slice(slashIdx + 1);
         info.index = parseIndex(indexName);
     } else {
-        var parts = strsplit(arg, '/', 2);
+        var parts = splitIntoTwo(arg, '/');
         if (parts.length === 1 || (
             /* or if parts[0] doesn't look like a hostname or IP */
             parts[0].indexOf('.') === -1 &&
@@ -190,7 +215,7 @@ function parseRepo(arg, defaultIndex) {
     }
 
     // Validate remoteName (docker `validateRemoteName`).
-    var nameParts = strsplit(remoteName, '/', 2);
+    var nameParts = splitIntoTwo(remoteName, '/');
     var ns, name;
     if (nameParts.length === 2) {
         name = nameParts[1];
@@ -272,7 +297,7 @@ function parseRepo(arg, defaultIndex) {
  *      If given it may either be a string, e.g. 'https://myreg.example.com',
  *      or parsed index object, as from `parseIndex()`.
  */
-function parseRepoAndRef(arg, defaultIndex) {
+export function parseRepoAndRef(arg: string, defaultIndex?: string | RegistryIndex) {
     // Parse off the tag/digest per
     // JSSTYLED
     // https://github.com/docker/docker/blob/0c7b51089c8cd7ef3510a9b40edaa139a7ca91aa/pkg/parsers/parsers.go#L69
@@ -304,26 +329,26 @@ function parseRepoAndRef(arg, defaultIndex) {
     return info;
 }
 
-var parseRepoAndTag = parseRepoAndRef;
+export const parseRepoAndTag = parseRepoAndRef;
 
 
 /**
  * Similar in spirit to docker.git:registry/endpoint.go#NewEndpoint().
  */
-function urlFromIndex(index) {
-    assert.bool(index.official, 'index.official');
-    assert.optionalString(index.scheme, 'index.scheme');
-    assert.string(index.name, 'index.name');
+export function urlFromIndex(index: RegistryIndex) {
+    // assert.bool(index.official, 'index.official');
+    // assert.optionalString(index.scheme, 'index.scheme');
+    // assert.string(index.name, 'index.name');
 
     if (index.official) {  // v1
         return DEFAULT_INDEX_URL;
     } else {
-        return fmt('%s://%s', index.scheme || 'https', index.name);
+        return `${index.scheme || 'https'}://${index.name}`;
     }
 }
 
 
-function objCopy(obj, target) {
+export function objCopy(obj: any, target: any) {
     if (!target) {
         target = {};
     }
@@ -334,7 +359,7 @@ function objCopy(obj, target) {
 }
 
 
-function deepObjCopy(obj) {
+export function deepObjCopy<T>(obj: T): T {
     // Obviously this is limited and not efficient.
     return JSON.parse(JSON.stringify(obj));
 }
@@ -349,9 +374,8 @@ function deepObjCopy(obj) {
  *
  * Adapted from tunnel-agent `mergeOptions`.
  */
-function objMerge(target) {
-    for (var i = 1, len = arguments.length; i < len; ++i) {
-        var overrides = arguments[i];
+export function objMerge(target: any, ...overrideList: any) {
+    for (const overrides of overrideList) {
         if (typeof (overrides) === 'object') {
             var keys = Object.keys(overrides);
             for (var j = 0, keyLen = keys.length; j < keyLen; ++j) {
@@ -368,7 +392,7 @@ function objMerge(target) {
 
 
 
-function isLocalhost(host) {
+export function isLocalhost(host: string) {
     var lead = host.split(':')[0];
     if (lead === 'localhost' || lead === '127.0.0.1') {
         return true;
@@ -389,56 +413,56 @@ function isLocalhost(host) {
  * similar. Both answers suck. So until we are at node 0.12 minimum we will
  * choose to use pause/resume. IOW, the caller must resume the stream.
  */
-function pauseStream(stream) {
-    function _buffer(chunk) {
-        stream.__buffered.push(chunk);
-    }
+// function pauseStream(stream) {
+//     function _buffer(chunk) {
+//         stream.__buffered.push(chunk);
+//     }
 
-    function _catchEnd(chunk) {
-        stream.__dockerreg_ended = true;
-    }
+//     function _catchEnd(chunk) {
+//         stream.__dockerreg_ended = true;
+//     }
 
-    stream.__dockerreg_ended = false;
-    stream.__dockerreg_paused = true;
-    stream.__buffered = [];
-    stream.on('data', _buffer);
-    stream.once('end', _catchEnd);
-    stream.pause();
+//     stream.__dockerreg_ended = false;
+//     stream.__dockerreg_paused = true;
+//     stream.__buffered = [];
+//     stream.on('data', _buffer);
+//     stream.once('end', _catchEnd);
+//     stream.pause();
 
-    stream._resume = stream.resume;
-    stream.resume = function _dockerreg_resume() {
-        if (!stream.__dockerreg_paused)
-            return;
+//     stream._resume = stream.resume;
+//     stream.resume = function _dockerreg_resume() {
+//         if (!stream.__dockerreg_paused)
+//             return;
 
-        stream.removeListener('data', _buffer);
-        stream.removeListener('end', _catchEnd);
+//         stream.removeListener('data', _buffer);
+//         stream.removeListener('end', _catchEnd);
 
-        stream.__buffered.forEach(stream.emit.bind(stream, 'data'));
-        stream.__buffered.length = 0;
+//         stream.__buffered.forEach(stream.emit.bind(stream, 'data'));
+//         stream.__buffered.length = 0;
 
-        stream._resume();
-        stream.resume = stream._resume;
+//         stream._resume();
+//         stream.resume = stream._resume;
 
-        if (stream.__dockerreg_ended)
-            stream.emit('end');
-    };
-}
+//         if (stream.__dockerreg_ended)
+//             stream.emit('end');
+//     };
+// }
 
 
-module.exports = {
-    DEFAULT_USERAGENT: DEFAULT_USERAGENT,
+// module.exports = {
+//     DEFAULT_USERAGENT: DEFAULT_USERAGENT,
 
-    DEFAULT_INDEX_NAME: DEFAULT_INDEX_NAME,
-    DEFAULT_TAG: DEFAULT_TAG,
-    parseIndex: parseIndex,
-    parseRepo: parseRepo,
-    parseRepoAndRef: parseRepoAndRef,
-    parseRepoAndTag: parseRepoAndTag,
-    urlFromIndex: urlFromIndex,
+//     DEFAULT_INDEX_NAME: DEFAULT_INDEX_NAME,
+//     DEFAULT_TAG: DEFAULT_TAG,
+//     parseIndex: parseIndex,
+//     parseRepo: parseRepo,
+//     parseRepoAndRef: parseRepoAndRef,
+//     parseRepoAndTag: parseRepoAndTag,
+//     urlFromIndex: urlFromIndex,
 
-    isLocalhost: isLocalhost,
-    objCopy: objCopy,
-    deepObjCopy: deepObjCopy,
-    objMerge: objMerge,
-    pauseStream: pauseStream
-};
+//     isLocalhost: isLocalhost,
+//     objCopy: objCopy,
+//     deepObjCopy: deepObjCopy,
+//     objMerge: objMerge,
+//     pauseStream: pauseStream
+// };

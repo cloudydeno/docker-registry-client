@@ -1,3 +1,18 @@
+
+# deno-docker_registry_client
+
+A port of a Docker Registry API client. Original README below.
+
+Only focusing on the v2 Registry API.
+
+## Auth Examples
+
+* dockerhub: normal user/password
+* github: `-u $USERNAME -p $GITHUB_TOKEN`
+* ecr: `-u AWS -p $(aws ecr get-login-password)`
+    * you need AWS auth even for 'public' images
+* gcr: `-u oauth2accesstoken -p $(gcloud auth print-access-token)`
+
 # node-docker-registry-client
 
 A Docker Registry API client for node.js.

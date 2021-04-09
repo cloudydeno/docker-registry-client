@@ -1,6 +1,3 @@
-/tmp
-/node_modules
-/docker-registry-client-*.tgz
 *.layer
 *.blob
 /examples/v2/*.manifest

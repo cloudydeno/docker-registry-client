@@ -41,7 +41,6 @@ Deno.test('v2 quay.io / supportsV2', async () => {
 Deno.test('v2 quay.io / ping', async () => {
     const client = createClient({ repo });
     const res = await client.ping();
-    await res.arrayBuffer();
     assertEquals(res.status, 401);
     assert(res.headers.get('www-authenticate'));
     assertEquals(res.headers.get('docker-distribution-api-version'), 'registry/2.0');
@@ -81,7 +80,7 @@ let _manifestDigest: string | null;
 Deno.test('v2 quay.io / getManifest', async () => {
     const client = createClient({ repo });
     const {manifest, resp} = await client.getManifest({ref: TAG});
-    _manifest = manifest;
+    _manifest = manifest ?? null;
     _manifestDigest = resp.headers.get('docker-content-digest');
     assert(manifest);
     assertEquals(manifest.schemaVersion, 1);

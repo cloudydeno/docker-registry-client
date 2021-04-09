@@ -777,13 +777,15 @@ export async function ping(opts: {
         // proxy: opts.proxy
     });
 
-    return await client.get({
+    const resp = await client.get({
         path: '/v2/',
         expectStatus: [200, 401, 404],
         // Ping should be fast. We don't want 15s of retrying.
         retry: false,
         connectTimeout: 10000,
     });
+    await resp.dockerBody();
+    return resp;
 }
 
 
@@ -858,7 +860,6 @@ export async function login(opts: {
     let chalHeader = opts.pingRes?.headers.get('www-authenticate');
     if (!chalHeader) {
         const res = await ping(opts);
-        await res.arrayBuffer();
         if (res.status === 200) {
             // No authorization is necessary.
             return {
@@ -1151,7 +1152,6 @@ export class RegistryClientV2 {
         let res;
         try {
             res = await this.ping();
-            await res.arrayBuffer();
         } catch (err) {
             if (err.resp) return false;
             throw err;
@@ -1237,7 +1237,8 @@ export class RegistryClientV2 {
         const resp = await this._api.get({
             path: `/v2/${encodeURI(this.repo.remoteName ?? '')}/manifests/${encodeURI(opts.ref)}`,
             headers: headers,
-            redirect: opts.followRedirects ? 'follow' : 'error',
+            redirect: opts.followRedirects == false ? 'manual' : 'follow',
+            expectStatus: opts.followRedirects == false ? [200, 301,302,307] : [200],
         }).catch(err => {
             if (err.resp?.status === 401) {
                 // Convert into a 404 error.
@@ -1250,6 +1251,10 @@ export class RegistryClientV2 {
             }
             throw err;
         });
+
+        if (resp.status > 300 && resp.status < 400) {
+            return {resp};
+        }
 
         const manifest = await resp.dockerJson() as Manifest;
 

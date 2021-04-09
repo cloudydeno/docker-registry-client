@@ -87,7 +87,7 @@ export class DockerJsonClient {
         const rawResp = await fetch(new URL(opts.path, this.url), {
             method: 'GET',
             headers: headers,
-            redirect: opts.redirect ?? 'error',
+            redirect: opts.redirect ?? 'manual',
         });
         const resp = new DockerResponse(rawResp.body, rawResp);
 

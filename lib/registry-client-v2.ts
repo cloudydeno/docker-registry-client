@@ -972,6 +972,7 @@ interface RegistryClientV2Opts {
     acceptManifestLists?: boolean;
     maxSchemaVersion?: number;
     userAgent?: string;
+    scopes?: string[];
 };
 
 
@@ -983,6 +984,7 @@ export class RegistryClientV2 {
     maxSchemaVersion: number;
     username?: string;
     password?: string;
+    scopes: string[];
     private _loggedIn: boolean;
     private _loggedInScope?: string | null;
     private _authInfo?: AuthInfo | null;
@@ -1024,6 +1026,7 @@ export class RegistryClientV2 {
         this.maxSchemaVersion = opts.maxSchemaVersion || 1;
         this.username = opts.username;
         this.password = opts.password;
+        this.scopes = opts.scopes ?? ['pull'];
         this._loggedIn = false;
         this._loggedInScope = null; // Keeps track of the login type.
         this._authInfo = null;
@@ -1114,10 +1117,9 @@ export class RegistryClientV2 {
      */
     async login(opts: {
         pingRes?: Response;
-        pingErr?: unknown;
         scope?: string;
     } = {}) {
-        var scope = opts.scope || _makeAuthScope('repository', this.repo.remoteName!, ['pull']);
+        var scope = opts.scope || _makeAuthScope('repository', this.repo.remoteName!, this.scopes);
 
         if (this._loggedIn && this._loggedInScope === scope) {
             return;
@@ -1306,6 +1308,20 @@ export class RegistryClientV2 {
         // TODO: `verifyTrustedKeys` from
         // docker/graph/pull_v2.go#validateManifest()
         return {resp, manifest};
+    };
+
+
+    async deleteManifest(opts: {
+        ref: string;
+    }) {
+        await this.login();
+        const resp = await this._api.request({
+            method: 'DELETE',
+            path: `/v2/${encodeURI(this.repo.remoteName ?? '')}/manifests/${encodeURI(opts.ref)}`,
+            headers: this._headers,
+            expectStatus: [200, 202],
+        });
+        await resp.dockerJson(); // GCR gives { errors: [] }
     };
 
 

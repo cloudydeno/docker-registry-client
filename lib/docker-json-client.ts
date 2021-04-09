@@ -47,6 +47,15 @@ import * as Base64 from "https://deno.land/std@0.92.0/encoding/base64.ts";
 
 // --- API
 
+interface HttpReqOpts {
+    path: string;
+    headers?: Headers;
+    retry?: boolean;
+    connectTimeout?: number;
+    expectStatus?: number[];
+    redirect?: RequestRedirect;
+}
+
 export class DockerJsonClient {
     accept: string;
     name: string;
@@ -70,14 +79,7 @@ export class DockerJsonClient {
         this.userAgent = options.userAgent;
     }
 
-    async get(opts: {
-        path: string,
-        headers?: Headers,
-        retry?: boolean,
-        connectTimeout?: number,
-        expectStatus?: number[],
-        redirect?: RequestRedirect,
-    }) {
+    async request(opts: HttpReqOpts & { method: string; }) {
         const headers = new Headers(opts.headers);
         if (!headers.has('accept')) {
             headers.set('accept', this.accept);
@@ -85,7 +87,7 @@ export class DockerJsonClient {
         headers.set('user-agent', this.userAgent);
 
         const rawResp = await fetch(new URL(opts.path, this.url), {
-            method: 'GET',
+            method: opts.method,
             headers: headers,
             redirect: opts.redirect ?? 'manual',
         });
@@ -96,6 +98,13 @@ export class DockerJsonClient {
             throw await resp.dockerError(`Received unexpected HTTP ${rawResp.status} from ${opts.path}`);
         }
         return resp;
+    }
+
+    async get(opts: HttpReqOpts) {
+        return await this.request({
+            method: 'GET',
+            ...opts,
+        });
     }
 
 };

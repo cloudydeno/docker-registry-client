@@ -180,7 +180,7 @@ equivalents in this client lib.
 | listTags <br> `GET /v2/<name>/tags/list`            | Yes  | Fetch the tags under the repository identified by `name`. |
 | getManifest <br> `GET /v2/<name>/manifests/<reference>`         | Yes* | Fetch the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
 | putManifest <br> `PUT /v2/<name>/manifests/<reference>`         | No   | Put the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
-| deleteManifest <br> `DELETE /v2/<name>/manifests/<reference>`      | No   | Delete the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
+| deleteManifest <br> `DELETE /v2/<name>/manifests/<reference>`      | Yes  | Delete the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
 | createBlobReadStream <br> `GET /v2/<name>/blobs/<digest>` | No*  | Retrieve the blob from the registry identified by `digest`. |
 | headBlob <br> `HEAD /v2/<name>/blobs/<digest>`            | No*  | Retrieve the blob from the registry identified by `digest` -- just the headers. |
 | startBlobUpload <br> `POST /v2/<name>/blobs/uploads/`     | No   | Initiate a resumable blob upload. If successful, an upload location will be provided to complete the upload. Optionally, if the `digest` parameter is present, the request body will be used to complete the upload in a single request. |

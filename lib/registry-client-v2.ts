@@ -1325,85 +1325,68 @@ export class RegistryClientV2 {
     };
 
 
-// /**
-//  * Makes a http request to the given url, following any redirects, then fires
-//  * the callback(err, req, responses) with the result.
-//  *
-//  * Note that 'responses' is an *array* of restify http response objects, with
-//  * the last response being at the end of the array. When there is more than
-//  * one response, it means a redirect has been followed.
-//  */
-// _makeHttpRequest(opts, cb) {
-//     var this = this;
-//     assert.object(opts, 'opts');
-//     assert.string(opts.method, 'opts.method');
-//     assert.string(opts.path, 'opts.path');
-//     assert.string(opts.url, 'opts.url');
-//     assert.optionalObject(opts.headers, 'opts.headers');
-//     assert.optionalBool(opts.followRedirects, 'opts.followRedirects');
-//     assert.optionalNumber(opts.maxRedirects, 'opts.maxRedirects');
-//     assert.func(cb, 'cb');
+    /**
+     * Makes a http request to the given url, following any redirects, then fires
+     * the callback(err, req, responses) with the result.
+     *
+     * Note that 'responses' is an *array* of restify http response objects, with
+     * the last response being at the end of the array. When there is more than
+     * one response, it means a redirect has been followed.
+     */
+    async _makeHttpRequest(opts: {
+        method: string;
+        path: string;
+        // url: string;
+        headers?: Headers,
+        followRedirects?: boolean;
+        maxRedirects?: number;
+    }) {
+        const followRedirects = opts.followRedirects ?? true;
+        const maxRedirects = opts.maxRedirects ?? 3;
+        let numRedirs = 0;
+        let req = {
+            client: this._api,
+            path: opts.path,
+            headers: opts.headers,
+        };
+        const ress = new Array<DockerResponse>();
 
-//     var followRedirects = true;
-//     if (opts.hasOwnProperty('followRedirects')) {
-//         followRedirects = opts.followRedirects;
-//     }
-//     var maxRedirects = opts.maxRedirects || 3;
-//     var numRedirs = 0;
-//     var req;
-//     var ress = [];
+        while (numRedirs < maxRedirects) {
+            numRedirs += 1;
 
-//     function makeReq(reqOpts) {
-//         if (numRedirs >= maxRedirects) {
-//             cb(new errors.DownloadError(fmt(
-//                 'maximum number of redirects (%s) hit',
-//                 maxRedirects)), req, ress);
-//             return;
-//         }
-//         numRedirs += 1;
+            req.client.accept = ''; // TODO: do better
+            const resp = await req.client.request({
+                method: opts.method,
+                path: req.path,
+                headers: req.headers,
+                redirect: 'manual',
+                expectStatus: [200, 302, 307],
+            });
+            ress.push(resp);
 
-//         var client = restifyClients.createHttpClient(common.objMerge({
-//             url: reqOpts.url
-//         }, this._commonHttpClientOpts));
-//         this._clientsToClose.push(client);
+            if (!followRedirects) return ress;
+            if (!(resp.status === 302 || resp.status === 307)) return ress;
 
-//         client[opts.method](reqOpts, function _onConn(connErr, req_) {
-//             if (connErr) {
-//                 cb(connErr, req, ress);
-//                 return;
-//             }
-//             req = req_;
-//             req.on('result', function (err, res) {
-//                 ress.push(res);
-//                 if (err) {
-//                     cb(err, req, ress);
-//                     return;
-//                 }
-//                 if (followRedirects &&
-//                     (res.statusCode === 302 || res.statusCode === 307)) {
-//                     var loc = mod_url.parse(res.headers.location);
-//                     this.log.trace({numRedirs: numRedirs, loc: loc},
-//                         'got redir response');
-//                     makeReq({
-//                         url: loc.protocol + '//' + loc.host,
-//                         path: loc.path
-//                     });
-//                 } else {
-//                     // party like it's node 0.10
-//                     common.pauseStream(res);
-//                     this.log.trace({res: res}, 'got a non-redir response');
-//                     cb(null, req, ress);
-//                 }
-//             });
-//         });
-//     }
+            const location = resp.headers.get('location');
+            if (!location) return ress;
 
-//     makeReq({
-//         url: opts.url,
-//         path: opts.path,
-//         headers: opts.headers
-//     });
-// };
+            const loc = new URL(location, new URL(req.path, req.client.url));
+            // this.log.trace({numRedirs: numRedirs, loc: loc}, 'got redir response');
+            req = {
+                client: new DockerJsonClient({
+                    url: loc.origin,
+                    ...this._commonHttpClientOpts,
+                }),
+                path: loc.href.slice(loc.origin.length),
+                headers: new Headers,
+            };
+
+            // consume the redirect's body since probably no one else will
+            await resp.dockerBody();
+        }
+
+        throw new Error(`maximum number of redirects (${maxRedirects}) hit`);
+    };
 
 // /**
 //  * Makes a http request to the given url, following any redirects, then parses
@@ -1430,90 +1413,77 @@ export class RegistryClientV2 {
 //     });
 // };
 
-// _headOrGetBlob(opts, cb) {
-//     var this = this;
-//     assert.object(opts, 'opts');
-//     assert.string(opts.method, 'opts.method');
-//     assert.string(opts.digest, 'opts.digest');
-//     assert.func(cb, 'cb');
-
-//     var ress = [];
-
-//     vasync.pipeline({arg: this, funcs: [
-//         function doLogin(_, next) {
-//             this.login(next);
-//         },
-//         function doRequest(_, next) {
-//             this._makeHttpRequest({
-//                 method: opts.method,
-//                 url: this._url,
-//                 path: fmt('/v2/%s/blobs/%s',
-//                     encodeURI(this.repo.remoteName),
-//                     encodeURI(opts.digest)),
-//                 headers: this._headers
-//             }, function (err, req, responses) {
-//                 ress = responses;
-//                 next(err);
-//             });
-//         }
-//     ]}, function (err) {
-//         cb(err, ress);
-//     });
-// };
+    async _headOrGetBlob(opts: {
+        method: string;
+        digest: string;
+    }) {
+        await this.login();
+        return await this._makeHttpRequest({
+            method: opts.method,
+            // url: this._url,
+            path: `/v2/${encodeURI(this.repo.remoteName ?? '')}/blobs/${encodeURI(opts.digest)}`,
+            headers: this._headers,
+        });
+    };
 
 
-// /*
-//  * Get an image file blob -- just the headers. See `getBlob`.
-//  *
-//  * <https://docs.docker.com/registry/spec/api/#get-blob>
-//  * <https://docs.docker.com/registry/spec/api/#pulling-an-image-manifest>
-//  *
-//  * This endpoint can return 3xx redirects. An example first hit to Docker Hub
-//  * yields this response
-//  *
-//  *      HTTP/1.1 307 Temporary Redirect
-//  *      docker-content-digest: sha256:b15fbeba7181d178e366a5d8e0...
-//  *      docker-distribution-api-version: registry/2.0
-//  *      location: https://dseasb33srnrn.cloudfront.net/registry-v2/...
-//  *      date: Mon, 01 Jun 2015 23:43:55 GMT
-//  *      content-type: text/plain; charset=utf-8
-//  *      connection: close
-//  *      strict-transport-security: max-age=3153600
-//  *
-//  * And after resolving redirects, this:
-//  *
-//  *      HTTP/1.1 200 OK
-//  *      Content-Type: application/octet-stream
-//  *      Content-Length: 2471839
-//  *      Connection: keep-alive
-//  *      Date: Mon, 01 Jun 2015 20:23:43 GMT
-//  *      Last-Modified: Thu, 28 May 2015 23:02:16 GMT
-//  *      ETag: "f01c599df7404875a0c1740266e74510"
-//  *      Accept-Ranges: bytes
-//  *      Server: AmazonS3
-//  *      Age: 11645
-//  *      X-Cache: Hit from cloudfront
-//  *      Via: 1.1 e3799a12d0e2fdaad3586ff902aa529f.cloudfront.net (CloudFront)
-//  *      X-Amz-Cf-Id: 8EUekYdb8qGK48Xm0kmiYi1GaLFHbcv5L8fZPOUWWuB5zQfr72Qdfg==
-//  *
-//  * A client will typically want to follow redirects, so by default we
-//  * follow redirects and return a responses. If needed a `opts.noFollow=true`
-//  * could be implemented.
-//  *
-//  *      cb(err, ress)   // `ress` is the plural of `res` for "response"
-//  *
-//  * Interesting headers:
-//  * - `ress[0].headers['docker-content-digest']` is the digest of the
-//  *   content to be downloaded
-//  * - `ress[-1].headers['content-length']` is the number of bytes to download
-//  * - `ress[-1].headers[*]` as appropriate for HTTP caching, range gets, etc.
-//  */
-// headBlob(opts, cb) {
-//     this._headOrGetBlob({
-//         method: 'head',
-//         digest: opts.digest
-//     }, cb);
-// };
+/*
+ * Get an image file blob -- just the headers. See `getBlob`.
+ *
+ * <https://docs.docker.com/registry/spec/api/#get-blob>
+ * <https://docs.docker.com/registry/spec/api/#pulling-an-image-manifest>
+ *
+ * This endpoint can return 3xx redirects. An example first hit to Docker Hub
+ * yields this response
+ *
+ *      HTTP/1.1 307 Temporary Redirect
+ *      docker-content-digest: sha256:b15fbeba7181d178e366a5d8e0...
+ *      docker-distribution-api-version: registry/2.0
+ *      location: https://dseasb33srnrn.cloudfront.net/registry-v2/...
+ *      date: Mon, 01 Jun 2015 23:43:55 GMT
+ *      content-type: text/plain; charset=utf-8
+ *      connection: close
+ *      strict-transport-security: max-age=3153600
+ *
+ * And after resolving redirects, this:
+ *
+ *      HTTP/1.1 200 OK
+ *      Content-Type: application/octet-stream
+ *      Content-Length: 2471839
+ *      Connection: keep-alive
+ *      Date: Mon, 01 Jun 2015 20:23:43 GMT
+ *      Last-Modified: Thu, 28 May 2015 23:02:16 GMT
+ *      ETag: "f01c599df7404875a0c1740266e74510"
+ *      Accept-Ranges: bytes
+ *      Server: AmazonS3
+ *      Age: 11645
+ *      X-Cache: Hit from cloudfront
+ *      Via: 1.1 e3799a12d0e2fdaad3586ff902aa529f.cloudfront.net (CloudFront)
+ *      X-Amz-Cf-Id: 8EUekYdb8qGK48Xm0kmiYi1GaLFHbcv5L8fZPOUWWuB5zQfr72Qdfg==
+ *
+ * A client will typically want to follow redirects, so by default we
+ * follow redirects and return a responses. If needed a `opts.noFollow=true`
+ * could be implemented.
+ *
+ *      cb(err, ress)   // `ress` is the plural of `res` for "response"
+ *
+ * Interesting headers:
+ * - `ress[0].headers['docker-content-digest']` is the digest of the
+ *   content to be downloaded
+ * - `ress[-1].headers['content-length']` is the number of bytes to download
+ * - `ress[-1].headers[*]` as appropriate for HTTP caching, range gets, etc.
+ */
+async headBlob(opts: {
+    digest: string;
+}) {
+    const resp = await this._headOrGetBlob({
+        method: 'HEAD',
+        digest: opts.digest
+    });
+    // consume the final body - since HEADs don't have meaningful bodies
+    await resp.slice(-1)[0].arrayBuffer();
+    return resp;
+};
 
 
 // /**

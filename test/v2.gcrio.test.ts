@@ -97,8 +97,8 @@ Deno.test('v2 gcr.io / getManifest', async () => {
 });
 
 Deno.test('v2 gcr.io / getManifest (by digest)', async () => {
-    const client = createClient(clientOpts);
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
+    const client = createClient(clientOpts);
     const {manifest} = await client.getManifest({ref: _manifestDigest});
     assert(manifest);
     assertEquals(_manifest!.schemaVersion, manifest.schemaVersion);
@@ -137,71 +137,66 @@ Deno.test('v2 gcr.io / getManifest (bad username/password)', async () => {
     }, Error, ' 401 ');
 });
 
-// Deno.test('v2 gcr.io / headBlob', async () => {
-//     var digest = manifest.layers[0].digest;
-//     client.headBlob({digest: digest}, function (err, ress) {
-//         assert(ress, 'got responses');
-//         assert(Array.isArray(ress), 'responses is an array');
-//         var first = ress[0];
+Deno.test('v2 gcr.io / headBlob', async () => {
+    if (!_manifest) throw new Error('cannot test');
+    const client = createClient(clientOpts);
+    const digest = _manifest.layers?.[0].digest;
+    const ress = await client.headBlob({digest: digest!});
+    assert(Array.isArray(ress), 'responses is an array');
+    var first = ress[0];
 
-//         // First request statusCode on a redirect:
-//         // - gcr.io gives 302 (Found)
-//         // - docker.io gives 307
-//         assert([200, 302, 303, 307].indexOf(first.statusCode) !== -1,
-//             'first response status code 200, 302 or 307: statusCode=' +
-//             first.statusCode);
+    // First request statusCode on a redirect:
+    // - gcr.io gives 302 (Found)
+    // - docker.io gives 307
+    assert([200, 302, 303, 307].indexOf(first.status) !== -1,
+        'first response status code 200, 302 or 307: statusCode=' +
+        first.status);
 
-//         // No digest head is returned (it's using an earlier version of the
-//         // registry API).
-//         if (first.headers['docker-content-digest']) {
-//             assertEquals(first.headers['docker-content-digest'], digest);
-//         }
+    // No digest head is returned (it's using an earlier version of the
+    // registry API).
+    if (first.headers.get('docker-content-digest')) {
+        assertEquals(first.headers.get('docker-content-digest'), digest);
+    }
 
-//         assertEquals(first.headers['docker-distribution-api-version'],
-//             'registry/2.0');
+    assertEquals(first.headers.get('docker-distribution-api-version'),
+        'registry/2.0');
 
-//         var last = ress[ress.length - 1];
-//         assert(last);
-//         assertEquals(last.statusCode, 200,
-//             'last response status code should be 200');
+    var last = ress[ress.length - 1];
+    assert(last);
+    assertEquals(last.status, 200,
+        'last response status code should be 200');
 
-//         // Content-Type:
-//         // - docker.io gives 'application/octet-stream', which is what
-//         //   I'd expect for the GET response at least.
-//         // - However gcr.io, at least for the iamge being tested, now
-//         //   returns text/html.
-//         assertEquals(last.headers['content-type'],
-//             'text/html',
-//             format('expect specific Content-Type on last response; '
-//                 + 'statusCode=%s headers=%j',
-//                 last.statusCode, last.headers));
+    // Content-Type:
+    // - docker.io gives 'application/octet-stream', which is what
+    //   I'd expect for the GET response at least.
+    // - However gcr.io, at least for the iamge being tested, now
+    //   returns text/html.
+    assertEquals(last.headers.get('content-type'),
+        'text/html',
+        'expect specific Content-Type on last response; '
+            + `statusCode=${last.status}`);
 
-//         assert(last.headers['content-length']);
-//     });
-// });
+    assert(last.headers.get('content-length'));
+});
 
-// Deno.test('v2 gcr.io / headBlob (unknown digest)', async () => {
-//     client.headBlob({digest: 'cafebabe'}, function (err, ress) {
-//         assert(err);
-//         assert(ress);
-//         assert(Array.isArray(ress));
-//         assertEquals(ress.length, 1);
-//         // var res = ress[0];
+Deno.test('v2 gcr.io / headBlob (unknown digest)', async () => {
+    const client = createClient(clientOpts);
+    await assertThrowsAsync(async () => {
+        await client.headBlob({digest: 'cafebabe'});
+    }, Error, ' 400 '); // seems to be the latest code for this
 
-//         // statusCode:
-//         // - docker.io gives 404, which is what I'd expect
-//         // - gcr.io gives 405 (Method Not Allowed). Hrm.
-//         // The spec doesn't specify:
-//         // https://docs.docker.com/registry/spec/api/#existing-layers
-//         // assertEquals(res.status, 404);
+    // - docker.io gives 404, which is what I'd expect
+    // - gcr.io gives 405 (Method Not Allowed). Hrm.
+    // The spec doesn't specify:
+    // https://docs.docker.com/registry/spec/api/#existing-layers
+    // assertEquals(res.status, 404);
 
-//         // Docker-Distribution-Api-Version header:
-//         // docker.io includes this header here, gcr.io does not.
-//         // assertEquals(res.headers['docker-distribution-api-version'],
-//         //    'registry/2.0');
+    // Docker-Distribution-Api-Version header:
+    // docker.io includes this header here, gcr.io does not.
+    // assertEquals(res.headers['docker-distribution-api-version'],
+    //    'registry/2.0');
 
-//     });
-// });
+});
 
 // Deno.test('v2 gcr.io / createBlobReadStream', async () => {
 //     var digest = manifest.layers[0].digest;
@@ -214,9 +209,9 @@ Deno.test('v2 gcr.io / getManifest (bad username/password)', async () => {
 //         // First request statusCode on a redirect:
 //         // - gcr.io gives 302 (Found)
 //         // - docker.io gives 307
-//         assert([200, 302, 307].indexOf(first.statusCode) !== -1,
+//         assert([200, 302, 307].indexOf(first.status) !== -1,
 //             'first request status code 200, 302 or 307: statusCode=' +
-//             first.statusCode);
+//             first.status);
 
 //         // No digest head is returned (it's using an earlier version of the
 //         // registry API).
@@ -228,7 +223,7 @@ Deno.test('v2 gcr.io / getManifest (bad username/password)', async () => {
 //             'registry/2.0');
 
 //         assert(stream);
-//         assertEquals(stream.statusCode, 200);
+//         assertEquals(stream.status, 200);
 //         // Content-Type:
 //         // - docker.io gives 'application/octet-stream', which is what
 //         //   I'd expect for the GET response at least.
@@ -238,7 +233,7 @@ Deno.test('v2 gcr.io / getManifest (bad username/password)', async () => {
 //             'text/html',
 //             format('expect specific Content-Type on stream response; '
 //                 + 'statusCode=%s headers=%j',
-//                 stream.statusCode, stream.headers));
+//                 stream.status, stream.headers));
 //         assert(stream.headers['content-length']);
 
 //         var numBytes = 0;

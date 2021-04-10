@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S deno run
 
 /*
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -12,19 +12,16 @@
 
 /*
  * An example showing how an index (a.k.a. repository host) string is parsed.
- * Example:
- *      node examples/parseIndex.js docker.io
  */
 
-var drc = require('../');
+import { parseIndex } from "../lib/common.ts";
 
-if (process.argv.length < 2) {
+if (Deno.args.length != 1) {
     console.error(
         'usage:\n' +
-        '    node examples/parseIndex.js INDEX\n');
-    process.exit(2);
-
+        '    ./examples/parseIndex.ts INDEX\n');
+    Deno.exit(2);
 }
 
-var idx = drc.parseIndex(process.argv[2]);
+const idx = parseIndex(Deno.args[0]);
 console.log(JSON.stringify(idx, null, 4));

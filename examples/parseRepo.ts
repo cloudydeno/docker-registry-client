@@ -6,8 +6,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import { parseRepo } from "../lib/common.ts";
-
 /*
  * Copyright (c) 2015, Joyent, Inc.
  */
@@ -16,13 +14,14 @@ import { parseRepo } from "../lib/common.ts";
  * An example showing how a repo string is parsed.
  */
 
+import { parseRepo } from "../lib/common.ts";
+
 if (Deno.args.length !== 1) {
     console.error(
         'usage:\n' +
-        '    node examples/parseRepo.ts [INDEX/]REPO\n');
+        '    ./examples/parseRepo.ts [INDEX/]REPO\n');
     Deno.exit(2);
-
 }
 
-var repo = parseRepo(Deno.args[0]);
+const repo = parseRepo(Deno.args[0]);
 console.log(JSON.stringify(repo, null, 4));

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S deno run
 
 /*
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -14,15 +14,14 @@
  * An example showing how a repo string is parsed.
  */
 
-var drc = require('../');
+import { parseRepoAndTag } from "../lib/common.ts";
 
-if (process.argv.length < 2) {
+if (Deno.args.length !== 1) {
     console.error(
         'usage:\n' +
-        '    node examples/parseRepoAndRef.js [INDEX/]REPO[:TAG|@DIGEST]\n');
-    process.exit(2);
-
+        '    ./examples/parseRepoAndTag.ts [INDEX/]REPO[:TAG|@DIGEST]\n');
+    Deno.exit(2);
 }
 
-var rat = drc.parseRepoAndRef(process.argv[2]);
+const rat = parseRepoAndTag(Deno.args[0]);
 console.log(JSON.stringify(rat, null, 4));

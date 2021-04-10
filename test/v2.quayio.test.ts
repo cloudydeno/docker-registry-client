@@ -134,64 +134,55 @@ Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
     }, Error, ' 401 ');
 });
 
-// Deno.test('v2 quay.io / headBlob', async () => {
-//     const client = createClient({ repo });
-//     var digest = manifest.fsLayers[0].blobSum;
-//     client.headBlob({digest: digest}, function (err, ress) {
-//         t.ifErr(err);
-//         t.ok(ress);
-//         t.ok(Array.isArray(ress));
-//         var first = ress[0];
-//         t.ok(first.statusCode === 200 || first.statusCode === 307);
-//         assertEquals(first.headers['docker-content-digest'], digest);
+Deno.test('v2 quay.io / headBlob', async () => {
+    if (!_manifest) throw new Error('cannot test');
+    const client = createClient({ repo });
+    var digest = _manifest.fsLayers![0].blobSum;
+    const ress = await client.headBlob({digest: digest});
+    assert(ress);
+    assert(Array.isArray(ress));
+    var first = ress[0];
+    assert(first.status === 200 || first.status === 307);
+    assertEquals(first.headers.get('docker-content-digest'), digest);
 
-//         // Docker-Distribution-Api-Version header:
-//         // docker.io includes this header here, quay.io does not.
-//         // assertEquals(first.headers['docker-distribution-api-version'],
-//         //    'registry/2.0');
+    // Docker-Distribution-Api-Version header:
+    // docker.io includes this header here, quay.io does not.
+    // assertEquals(first.headers.get('docker-distribution-api-version'),
+    //    'registry/2.0');
 
-//         var last = ress[ress.length - 1];
-//         t.ok(last);
-//         assertEquals(last.statusCode, 200);
+    var last = ress[ress.length - 1];
+    assert(last);
+    assertEquals(last.status, 200);
 
-//         // Content-Type:
-//         // - docker.io gives 'application/octet-stream', which is what
-//         //   I'd expect for the GET response at least.
-//         // - quay.io current v2 support gives: 'text/html; charset=utf-8'
-//         if (!SKIP_QUAY_IO_BUGLETS) {
-//             assertEquals(last.headers['content-type'],
-//                 'application/octet-stream');
-//         }
+    // Content-Type:
+    // - docker.io gives 'application/octet-stream', which is what
+    //   I'd expect for the GET response at least.
+    // - quay.io current v2 support gives: 'text/html; charset=utf-8'
+    // if (!SKIP_QUAY_IO_BUGLETS) {
+        assertEquals(last.headers.get('content-type'),
+            'application/octet-stream');
+    // }
 
-//         t.ok(last.headers['content-length']);
-//         t.end();
-//     });
-// });
+    assert(last.headers.get('content-length'));
+});
 
-// Deno.test('v2 quay.io / headBlob (unknown digest)', async () => {
-//     const client = createClient({ repo });
-//     client.headBlob({digest: 'cafebabe'}, function (err, ress) {
-//         t.ok(err);
-//         t.ok(ress);
-//         t.ok(Array.isArray(ress));
-//         assertEquals(ress.length, 1);
-//         // var res = ress[0];
+Deno.test('v2 quay.io / headBlob (unknown digest)', async () => {
+    const client = createClient({ repo });
 
-//         // statusCode:
-//         // - docker.io gives 404, which is what I'd expect
-//         // - quay.io gives 405 (Method Not Allowed). Hrm.
-//         // The spec doesn't specify:
-//         // https://docs.docker.com/registry/spec/api/#existing-layers
-//         // assertEquals(res.statusCode, 404);
+    await assertThrowsAsync(async () => {
+        await client.headBlob({digest: 'cafebabe'});
+    }, Error, ' 405 ');
+    // - docker.io gives 404, which is what I'd expect
+    // - quay.io gives 405 (Method Not Allowed). Hrm.
+    // The spec doesn't specify:
+    // https://docs.docker.com/registry/spec/api/#existing-layers
+    // assertEquals(res.status, 404);
 
-//         // Docker-Distribution-Api-Version header:
-//         // docker.io includes this header here, quay.io does not.
-//         // assertEquals(res.headers['docker-distribution-api-version'],
-//         //    'registry/2.0');
-
-//         t.end();
-//     });
-// });
+    // Docker-Distribution-Api-Version header:
+    // docker.io includes this header here, quay.io does not.
+    // assertEquals(res.headers['docker-distribution-api-version'],
+    //    'registry/2.0');
+});
 
 // Deno.test('v2 quay.io / createBlobReadStream', async () => {
 //     const client = createClient({ repo });
@@ -200,15 +191,15 @@ Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
 //             function (err, stream, ress) {
 //         t.ifErr(err);
 
-//         t.ok(ress);
-//         t.ok(Array.isArray(ress));
+//         assert(ress);
+//         assert(Array.isArray(ress));
 //         var first = ress[0];
 //         // First request statusCode on a redirect:
 //         // - quay.io gives 302 (Found)
 //         // - docker.io gives 307
-//         t.ok([200, 302, 307].indexOf(first.statusCode) !== -1,
+//         assert([200, 302, 307].indexOf(first.status) !== -1,
 //             'first request status code 200, 302 or 307: statusCode=' +
-//             first.statusCode);
+//             first.status);
 //         assertEquals(first.headers['docker-content-digest'], digest);
 
 //         // Docker-Distribution-Api-Version header:
@@ -216,8 +207,8 @@ Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
 //         // assertEquals(first.headers['docker-distribution-api-version'],
 //         //    'registry/2.0');
 
-//         t.ok(stream);
-//         assertEquals(stream.statusCode, 200);
+//         assert(stream);
+//         assertEquals(stream.status, 200);
 
 //         // Quay.io gives `Content-Type: binary/octet-stream` which has to
 //         // be a bug. AFAIK that isn't a real MIME type.
@@ -226,7 +217,7 @@ Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
 //                 'application/octet-stream');
 //         }
 
-//         t.ok(stream.headers['content-length']);
+//         assert(stream.headers['content-length']);
 
 //         var numBytes = 0;
 //         var hash = crypto.createHash(digest.split(':')[0]);
@@ -247,9 +238,9 @@ Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
 //     const client = createClient({ repo });
 //     client.createBlobReadStream({digest: 'cafebabe'},
 //             function (err, stream, ress) {
-//         t.ok(err);
-//         t.ok(ress);
-//         t.ok(Array.isArray(ress));
+//         assert(err);
+//         assert(ress);
+//         assert(Array.isArray(ress));
 //         assertEquals(ress.length, 1);
 //         // var res = ress[0];
 
@@ -258,7 +249,7 @@ Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
 //         // - quay.io gives 405 (Method Not Allowed). Hrm.
 //         // The spec doesn't specify:
 //         // https://docs.docker.com/registry/spec/api/#existing-layers
-//         // assertEquals(res.statusCode, 404);
+//         // assertEquals(res.status, 404);
 
 //         // Docker-Distribution-Api-Version header:
 //         // docker.io includes this header here, quay.io does not.

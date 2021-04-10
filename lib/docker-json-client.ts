@@ -71,9 +71,9 @@ export class DockerJsonClient {
         rejectUnauthorized?: boolean;
         userAgent: string;
     }) {
-        this.accept = options.accept || 'application/json';
-        this.name = options.name || 'DockerJsonClient';
-        this.contentType = options.contentType || 'application/json';
+        this.accept = options.accept ?? 'application/json';
+        this.name = options.name ?? 'DockerJsonClient';
+        this.contentType = options.contentType ?? 'application/json';
         this.url = options.url;
         // this.rejectUnauthorized = options.rejectUnauthorized;
         this.userAgent = options.userAgent;
@@ -81,7 +81,7 @@ export class DockerJsonClient {
 
     async request(opts: HttpReqOpts & { method: string; }) {
         const headers = new Headers(opts.headers);
-        if (!headers.has('accept')) {
+        if (!headers.has('accept') && this.accept) {
             headers.set('accept', this.accept);
         }
         headers.set('user-agent', this.userAgent);
@@ -95,7 +95,9 @@ export class DockerJsonClient {
 
         const expectStatus = opts.expectStatus ?? [200];
         if (!expectStatus.includes(rawResp.status)) {
-            throw await resp.dockerError(`Received unexpected HTTP ${rawResp.status} from ${opts.path}`);
+            throw await resp
+                .dockerError(`Received unexpected HTTP ${rawResp.status} from ${opts.path}`)
+                .catch(err => new Error(`Received unexpected HTTP ${rawResp.status} from ${opts.path} - and failed to parse error body: ${err.message}`));
         }
         return resp;
     }

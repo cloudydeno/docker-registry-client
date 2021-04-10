@@ -16,7 +16,7 @@ import { RegistryImage, RegistryIndex } from "./types.ts";
 // var DEFAULT_USERAGENT = 'node-docker-registry-client/' + VERSION +
 //     ' (' + os.arch() + '-' + os.platform() + '; ' +
 //    'node/' + process.versions.node + ')';
-export const DEFAULT_USERAGENT = 'deno-docker-registry-client/' + '0.1.0' +
+export const DEFAULT_USERAGENT = 'deno-docker_registry_client/' + '0.1.0' +
 ' (+'+import.meta.url+'; ' +
 'deno/' + Deno.version + ')';
 
@@ -326,48 +326,10 @@ export function urlFromIndex(index: RegistryIndex) {
 }
 
 
-export function objCopy(obj: any, target: any) {
-    if (!target) {
-        target = {};
-    }
-    Object.keys(obj).forEach(function (k) {
-        target[k] = obj[k];
-    });
-    return target;
-}
-
-
 export function deepObjCopy<T>(obj: T): T {
     // Obviously this is limited and not efficient.
     return JSON.parse(JSON.stringify(obj));
 }
-
-
-/*
- * Merge given objects into the given `target` object. Last one wins.
- * The `target` is modified in place.
- *
- *      var foo = {bar: 32};
- *      objMerge(foo, {bar: 42}, {bling: 'blam'});
- *
- * Adapted from tunnel-agent `mergeOptions`.
- */
-export function objMerge(target: any, ...overrideList: any) {
-    for (const overrides of overrideList) {
-        if (typeof (overrides) === 'object') {
-            var keys = Object.keys(overrides);
-            for (var j = 0, keyLen = keys.length; j < keyLen; ++j) {
-                var k = keys[j];
-                if (overrides[k] !== undefined) {
-                    target[k] = overrides[k];
-                }
-            }
-        }
-    }
-    return target;
-}
-
-
 
 
 export function isLocalhost(host: string) {
@@ -378,50 +340,3 @@ export function isLocalhost(host: string) {
         return false;
     }
 }
-
-
-
-/**
- * Note: Borrowed from muskie.git/lib/common.js around node 0.8 days.
- * I think I'm living in the past in still using this.
- *
- * This *could* be avoided with node 0.10, but would require the client
- * knowing to avoid accidentally getting the stream (from getImgFileStream)
- * into "flowing" mode -- e.g. from attaching a 'data' event listener or
- * similar. Both answers suck. So until we are at node 0.12 minimum we will
- * choose to use pause/resume. IOW, the caller must resume the stream.
- */
-// function pauseStream(stream) {
-//     function _buffer(chunk) {
-//         stream.__buffered.push(chunk);
-//     }
-
-//     function _catchEnd(chunk) {
-//         stream.__dockerreg_ended = true;
-//     }
-
-//     stream.__dockerreg_ended = false;
-//     stream.__dockerreg_paused = true;
-//     stream.__buffered = [];
-//     stream.on('data', _buffer);
-//     stream.once('end', _catchEnd);
-//     stream.pause();
-
-//     stream._resume = stream.resume;
-//     stream.resume = function _dockerreg_resume() {
-//         if (!stream.__dockerreg_paused)
-//             return;
-
-//         stream.removeListener('data', _buffer);
-//         stream.removeListener('end', _catchEnd);
-
-//         stream.__buffered.forEach(stream.emit.bind(stream, 'data'));
-//         stream.__buffered.length = 0;
-
-//         stream._resume();
-//         stream.resume = stream._resume;
-
-//         if (stream.__dockerreg_ended)
-//             stream.emit('end');
-//     };
-// }

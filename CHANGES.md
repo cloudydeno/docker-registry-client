@@ -1,8 +1,15 @@
+# deno-docker_registry_client Changelog
+
+## 0.1.1
+
+- Port headBlob
+
+## 0.1.0
+
+- Initial port of ping, login, listTags, & manifest get/delete
+- V2 API only
+
 # node-docker-registry-client Changelog
-
-## not yet released
-
-(nothing yet)
 
 ## 3.3.0
 

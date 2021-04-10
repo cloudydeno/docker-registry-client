@@ -8,10 +8,11 @@
  * Copyright 2016 Joyent, Inc.
  */
 
-import { RegistryImage, RegistryIndex } from "./types.ts";
-// import * as reg1 from './registry-client-v1.ts';
+import { RegistryImage } from "./types.ts";
 import * as reg2 from './registry-client-v2.ts';
 
+export * from './types.ts';
+export { RegistryClientV2, login, ping } from './registry-client-v2.ts';
 
 // --- exported functions
 
@@ -42,13 +43,10 @@ export async function createClient(opts: {
     userAgent?: string;
 }) {
     // Version given.
-    if (opts.version === 1) {
-        throw new Error('invalid API version: ' + opts.version);
-        // return reg1.createClient(opts);
-    } else if (opts.version === 2) {
+    if (opts.version === 2) {
         return reg2.createClient(opts);
     } else if (opts.version) {
-        throw new Error('invalid API version: ' + opts.version);
+        throw new Error('unsupported API version: ' + opts.version);
     }
 
     // First try v2.
@@ -56,63 +54,7 @@ export async function createClient(opts: {
     if (await client.supportsV2()) {
         return client;
     } else {
-        // Otherwise, fallback to v1.
-        throw new Error('invalid API version: ' + 'v1');
-        // return reg1.createClient(opts);
-    }
-}
-
-
-/*
- * Login to a Docker registry. Basically this just means testing given
- * creds (username/password) against the registry.
- *
- * This is wrapper around v1/v2 login. Generally speaking an attempt is
- * made to ping the given index to see if it supports v2. If so, then the
- * v2 Registry API login logic is used. Otherwise the v1 logic. However, as of
- * Docker 1.11 (Docker Remote API 1.23) the "email" field has been dropped
- * for login -- `docker login` no longer prompts for the email field. As a
- * result, `opts.email` is optional to this method. v1 logic is not attempted
- * if `opts.email` is not provided.
- *
- * See: docker.git:registry/auth.go#Login
- *
- * @param opts.index {String|Object} Required. One of an index *name*
- *      (e.g. "docker.io", "quay.io") that `parseIndex` will handle, an index
- *      *url* (e.g. the default from `docker login` is
- *      'https://index.docker.io/v1/'), or an index *object* as returned by
- *      `parseIndex`. For backward compatibility, `opts.indexName` may be
- *      used instead of `opts.index`.
- * @param opts.username {String} Required.
- * @param opts.password {String} Required.
- * @param opts.email {String} Optional. See discussion above.
- * ... Other optional opts fields. See the implementations. ...
- * @param cb {Function} `function (err, result)`
- *      On success, `result` is an object with:
- *          status      a string description of the login result status
- */
-export async function login(opts: {
-    index: string | RegistryIndex;
-    username: string;
-    password: string;
-    email?: string;
-}) {
-    const pingRes = await reg2.ping(opts);
-    if (!pingRes) {
-        throw new Error('no err *or* res from v2 ping');
-    }
-    if (pingRes.status === 404) {
-        // The index doesn't support v2, so try v1 if we can.
-        if (opts.email) {
-            // return await reg1.login(opts);
-        }
-    } else {
-        return await reg2.login({
-            // Pass this in so v2 login doesn't need to retry it for the
-            // WWW-Authenticate header.
-            pingRes: pingRes,
-            ...opts,
-        });
+        throw new Error('unsupported API version: ' + 'v1');
     }
 }
 

@@ -2,14 +2,12 @@
 
 # Deno `/x/docker_registry_client`
 
-A port of a Docker Registry API client.
+A port of a Docker Registry API V2 client.
 
 The [original Node.JS project](https://github.com/joyent/node-docker-registry-client)
 README included these notes:
 
-> Limitations: Currently only support for Registry API v1
-> (<https://docs.docker.com/v1.6/reference/api/registry_api/>) *pull* support
-> (i.e. excluding API endpoints for push) and Registry API v2 *pull* support.
+> Limitations: Currently only support for [...] Registry API v2 *pull* support.
 > Support for v2 push endpoints is coming.
 >
 > Note: This repository is part of the Joyent Triton project. See the
@@ -20,9 +18,6 @@ README included these notes:
 ## Design Points
 
 * Only handling the v2 Registry API.
-    * I can't imagine a reason to keep the v1 API code at all.
-        Please let me know if you have any such reasoning.
-        I'm going to delete it otherwise.
 * Typescript, async/await, Promises, `fetch()`
 * Focus on image management.
     For example, listing and deleting tags.
@@ -123,8 +118,7 @@ If a scheme isn't given, then "https" is assumed.
 
 ## Usage
 
-If you know, for example, that you are only dealing with a v2 Docker Registry,
-then simple usage will look like this:
+Simple usage will look like this:
 
 ```typescript
 import { createClient } from 'https://deno.land/x/docker_registry_client/registry-client-v2.ts';
@@ -136,7 +130,7 @@ const tags = await client.listTags();
 console.log(JSON.stringify(tags, null, 4));
 ```
 
-A more complete example (showing auth, etc.):
+If you need to authenticate, the createClient call might look more like this:
 
 ```typescript
 import { createClient } from 'https://deno.land/x/docker_registry_client/registry-client-v2.ts';
@@ -152,17 +146,6 @@ var client = createClient({
     // insecure: <true|false>,
     // ... see the source code for other options
 });
-```
-
-This package also supports the nominal technique for pinging the registry
-to see if it supports v2, otherwise falling back to v1:
-
-```typescript
-import { createClient } from 'https://deno.land/x/docker_registry_client/index.ts';
-
-var REPO = 'alpine';
-const client = await createClient({name: REPO, /* ... */});
-console.log('Got a Docker Registry API v%d client', client.version);
 ```
 
 NOTE: This port does not include v1 support
@@ -231,7 +214,7 @@ $ ./examples/v2/listTags.ts -v busybox
 
 ## v1 API
 
-Not ported. Likely to be deleted instead.
+Not implemented. I see no reason to maintain v1 client code.
 
 ## Development
 

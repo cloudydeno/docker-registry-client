@@ -27,8 +27,8 @@ jobs:
     - name: Check index.ts
       run: time deno cache --reload ./lib/index.ts
 
-    - name: Run examples/ping.ts
-      run: time ./examples/ping.ts docker.io
+    - name: Run examples/v2/ping.ts
+      run: time ./examples/v2/ping.ts docker.io
 
     - name: Test
       run: time deno test --allow-net ./test/*.ts

@@ -8,32 +8,39 @@
  * Copyright (c) 2017, Joyent, Inc.
  */
 
+/*
+ * Specifically we want to test a repo name with a '/'.
+ * See <https://github.com/joyent/node-docker-registry-client/issues/16>.
+ */
+
 import {
     assert, assertEquals, assertThrowsHttp,
     getFirstLayerDigestFromManifest,
     hashAndCount,
+    dirname,
 } from "./util.ts";
 
-import { createClient, digestFromManifestStr, MEDIATYPE_MANIFEST_LIST_V2 } from "../lib/registry-client-v2.ts";
+import { createClient, MEDIATYPE_MANIFEST_LIST_V2 } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
 import { ManifestV2 } from "../lib/types.ts";
 
 // --- globals
 
-const REPO = 'busybox';
-const TAG = 'latest';
+const REPO = 'registry.gitlab.com/masakura/docker-registry-client-bug-sample/image';
+const TAG = 'hello-world';
+
 
 // --- Tests
 
 const repo = parseRepo(REPO);
 
-Deno.test('v2 docker.io / createClient', async () => {
+Deno.test('v2 registry.gitlab.com / createClient', async () => {
     const client = createClient({ repo });
     assert(client);
     assertEquals(client.version, 2);
 });
 
-Deno.test('v2 docker.io / ping', async () => {
+Deno.test('v2 registry.gitlab.com / ping', async () => {
     const client = createClient({ repo });
     const res = await client.ping();
     assert(res, 'have a response');
@@ -48,12 +55,12 @@ Deno.test('v2 docker.io / ping', async () => {
     *      "tags": [ "2.6", "2.7", "3.1", "3.2", "edge", "latest" ]
     *  }
     */
-Deno.test('v2 docker.io / listTags', async () => {
+Deno.test('v2 registry.gitlab.com / listTags', async () => {
     const client = createClient({ repo });
     const tags = await client.listTags();
     assert(tags);
     assertEquals(tags.name, repo.remoteName);
-    assert(tags.tags.indexOf(TAG) !== -1, 'no "'+TAG+'" tag');
+    assert(tags.tags.indexOf(TAG) !== -1, 'have a "'+TAG+'" tag');
 });
 
 /*
@@ -70,63 +77,20 @@ Deno.test('v2 docker.io / listTags', async () => {
     *      "signature": <JWS>
     *  }
     */
-Deno.test('v2 docker.io / getManifest (v2.1)', async () => {
-    const client = createClient({ repo });
-    const {manifest} = await client.getManifest({ref: TAG});
-    assert(manifest);
-    assertEquals(manifest.schemaVersion, 1);
-    assert(manifest.schemaVersion === 1);
-    assertEquals(manifest.name, repo.remoteName);
-    assertEquals(manifest.tag, TAG);
-    assert(manifest.architecture);
-    assert(manifest.fsLayers);
-    assert(manifest.history[0].v1Compatibility);
-    assert(manifest.signatures?.[0].signature);
-});
-
-/*
-    * {
-    *   "schemaVersion": 2,
-    *   "mediaType": "application/vnd.docker.dis...ion.manifest.list.v2+json",
-    *   "manifests": [
-    *     {
-    *       "mediaType": "application/vnd.docker.dis...ion.manifest.v2+json",
-    *       "size": 528,
-    *       "digest": "sha256:4b920400cf4c9...29ab9dd64eaa652837cd39c2cdf",
-    *       "platform": {
-    *         "architecture": "amd64",
-    *         "os": "linux"
-    *       }
-    *     }
-    *   ]
-    * }
-    */
-let _manifest: ManifestV2 | null;
-let _manifestDigest: string | null;
-Deno.test('v2 docker.io / getManifest (v2.2 list)', async () => {
-    const client = createClient({ repo });
-    var getOpts = {
-        acceptManifestLists: true,
-        maxSchemaVersion: 2,
-        ref: TAG
-    };
-    const {manifest} = await client.getManifest(getOpts);
-    assert(manifest);
-    assertEquals(manifest.schemaVersion, 2);
-    assert(manifest.schemaVersion === 2);
-    assertEquals(manifest.mediaType, MEDIATYPE_MANIFEST_LIST_V2,
-        'mediaType should be manifest list');
-    assert(manifest.mediaType === MEDIATYPE_MANIFEST_LIST_V2);
-    assert(Array.isArray(manifest.manifests), 'manifests is an array');
-    manifest.manifests.forEach(function (m) {
-        assert(m.digest, 'm.digest');
-        assert(m.platform, 'm.platform');
-        assert(m.platform.architecture, 'm.platform.architecture');
-        assert(m.platform.os, 'os.platform.os');
-    });
-    // Take the first manifest (for testing purposes).
-    _manifestDigest = manifest.manifests[0].digest;
-});
+// Seems like Gitlab isn't serving up v2.1 anymore.
+// Deno.test('v2 registry.gitlab.com / getManifest (v2.1)', async () => {
+//     const client = createClient({ repo });
+//     const {manifest} = await client.getManifest({ref: TAG});
+//     assert(manifest);
+//     assertEquals(manifest.schemaVersion, 1);
+//     assert(manifest.schemaVersion === 1);
+//     assertEquals(manifest.name, repo.remoteName);
+//     assertEquals(manifest.tag, TAG);
+//     assert(manifest.architecture);
+//     assert(manifest.fsLayers);
+//     assert(manifest.history[0].v1Compatibility);
+//     assert(manifest.signatures?.[0].signature);
+// });
 
 /*
     * {
@@ -146,11 +110,13 @@ Deno.test('v2 docker.io / getManifest (v2.2 list)', async () => {
     *   ]
     * }
     */
-Deno.test('v2 docker.io / getManifest (v2.2)', async () => {
+let _manifest: ManifestV2 | null;
+let _manifestDigest: string | null;
+Deno.test('v2 registry.gitlab.com / getManifest (v2.2)', async () => {
     const client = createClient({ repo });
     var getOpts = {ref: TAG, maxSchemaVersion: 2};
     const {manifest, resp} = await client.getManifest(getOpts);
-    assert(manifest);
+    _manifestDigest = resp.headers.get('docker-content-digest');
     assertEquals(manifest.schemaVersion, 2);
     assert(manifest.schemaVersion === 2);
     assert(manifest.mediaType !== MEDIATYPE_MANIFEST_LIST_V2);
@@ -160,25 +126,19 @@ Deno.test('v2 docker.io / getManifest (v2.2)', async () => {
     assert(manifest.layers);
     assert(manifest.layers.length > 0);
     assert(manifest.layers[0].digest);
-
-    const manifestStr = new TextDecoder().decode(await resp.dockerBody());
-    const computedDigest = digestFromManifestStr(manifestStr);
-    assertEquals(computedDigest, _manifestDigest,
-        'compare computedDigest to expected manifest digest');
-    // Note that res.headers['docker-content-digest'] may be incorrect,
-    // c.f. https://github.com/docker/distribution/issues/2395
 });
 
 /*
     * Note this test requires that the manifest be pulled in the v2.2 format,
     * otherwise you will get a manifest not found error.
     */
-Deno.test('v2 docker.io / getManifest (by digest)', async () => {
-    if (!_manifestDigest || !_manifest) throw new Error('cannot test');
+Deno.test('v2 registry.gitlab.com / getManifest (by digest)', async () => {
     const client = createClient({ repo });
-    var getOpts = {ref: _manifestDigest, maxSchemaVersion: 2};
-    const {manifest} = await client.getManifest(getOpts);
-    assert(manifest, 'Got the manifest object');
+    const {manifest} = await client.getManifest({
+        ref: _manifestDigest!,
+        maxSchemaVersion: 2,
+    });
+    assert(manifest);
     assertEquals(_manifest!.schemaVersion, manifest.schemaVersion);
     assert(manifest.schemaVersion === 2);
     assert(manifest.mediaType !== MEDIATYPE_MANIFEST_LIST_V2);
@@ -186,24 +146,24 @@ Deno.test('v2 docker.io / getManifest (by digest)', async () => {
     assertEquals(_manifest!.layers, manifest.layers);
 });
 
-Deno.test('v2 docker.io / getManifest (unknown tag)', async () => {
+Deno.test('v2 registry.gitlab.com / getManifest (unknown tag)', async () => {
     const client = createClient({ repo });
     await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'unknowntag'});
     }, 404);
 });
 
-Deno.test('v2 docker.io / getManifest (unknown repo)', async () => {
+Deno.test('v2 registry.gitlab.com / getManifest (unknown repo)', async () => {
     const client = createClient({
         maxSchemaVersion: 2,
-        name: 'unknownreponame',
+        name: dirname(REPO) + '/unknownreponame',
     });
     await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'latest'});
-    }, 401);
+    }, 404);
 });
 
-Deno.test('v2 docker.io / getManifest (bad username/password)', async () => {
+Deno.test('v2 registry.gitlab.com / getManifest (bad username/password)', async () => {
     const client = createClient({
         maxSchemaVersion: 2,
         repo,
@@ -215,7 +175,7 @@ Deno.test('v2 docker.io / getManifest (bad username/password)', async () => {
     }, 401);
 });
 
-Deno.test('v2 docker.io / headBlob', async () => {
+Deno.test('v2 registry.gitlab.com / headBlob', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
     const client = createClient({ repo });
     var digest = getFirstLayerDigestFromManifest(_manifest);
@@ -242,7 +202,7 @@ Deno.test('v2 docker.io / headBlob', async () => {
     assert(last.headers.get('content-length'));
 });
 
-Deno.test('v2 docker.io / headBlob (unknown digest)', async () => {
+Deno.test('v2 registry.gitlab.com / headBlob (unknown digest)', async () => {
     const client = createClient({ repo });
     const {resp} = await assertThrowsHttp(async () => {
         await client.headBlob({digest: 'cafebabe'});
@@ -251,7 +211,7 @@ Deno.test('v2 docker.io / headBlob (unknown digest)', async () => {
         'registry/2.0');
 });
 
-Deno.test('v2 docker.io / createBlobReadStream', async () => {
+Deno.test('v2 registry.gitlab.com / createBlobReadStream', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
     const client = createClient({ repo });
     const digest = getFirstLayerDigestFromManifest(_manifest);
@@ -283,7 +243,7 @@ Deno.test('v2 docker.io / createBlobReadStream', async () => {
     assertEquals(numBytes, Number(last.headers.get('content-length')));
 });
 
-Deno.test('v2 docker.io / createBlobReadStream (unknown digest)', async () => {
+Deno.test('v2 registry.gitlab.com / createBlobReadStream (unknown digest)', async () => {
     const client = createClient({ repo });
     const {resp} = await assertThrowsHttp(async () => {
         await client.createBlobReadStream({digest: 'cafebabe'})

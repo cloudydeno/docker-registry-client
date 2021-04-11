@@ -8,13 +8,16 @@
  * Copyright (c) 2017, Joyent, Inc.
  */
 
-import { assertEquals, assert } from "https://deno.land/std@0.92.0/testing/asserts.ts";
+import {
+    assert, assertEquals, assertThrowsHttp,
+    getFirstLayerDigestFromManifest,
+    hashAndCount,
+    dirname,
+} from "./util.ts";
+
 import { createClient } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
 import { ManifestV1 } from "../lib/types.ts";
-import { dirname } from "https://deno.land/std@0.92.0/path/posix.ts";
-import { Sha256 } from "https://deno.land/std@0.92.0/hash/sha256.ts";
-import { assertThrowsHttp } from "./util.ts";
 
 // --- globals
 
@@ -138,8 +141,8 @@ Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
 Deno.test('v2 quay.io / headBlob', async () => {
     if (!_manifest) throw new Error('cannot test');
     const client = createClient({ repo });
-    var digest = _manifest.fsLayers[0].blobSum;
-    const ress = await client.headBlob({digest: digest});
+    var digest = getFirstLayerDigestFromManifest(_manifest);
+    const ress = await client.headBlob({ digest });
     assert(ress);
     assert(Array.isArray(ress));
     var first = ress[0];
@@ -187,7 +190,7 @@ Deno.test('v2 quay.io / createBlobReadStream', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
     const client = createClient({ repo });
     const digest = _manifest.fsLayers[0].blobSum;
-    const {ress, stream} = await client.createBlobReadStream({digest: digest});
+    const {ress, stream} = await client.createBlobReadStream({ digest });
     assert(ress, 'got responses');
     assert(Array.isArray(ress), 'ress is an array');
 
@@ -208,13 +211,8 @@ Deno.test('v2 quay.io / createBlobReadStream', async () => {
     assert(last.headers.get('content-length') !== undefined,
         'got a "content-length" header');
 
-    var numBytes = 0;
-    const hash = new Sha256();
-    for await (const chunk of stream) {
-        hash.update(chunk);
-        numBytes += chunk.length;
-    }
-    assertEquals(hash.hex(), digest.split(':')[1]);
+    const {hashHex, numBytes} = await hashAndCount(digest.split(':')[0], stream);
+    assertEquals(hashHex, digest.split(':')[1]);
     assertEquals(numBytes, Number(last.headers.get('content-length')));
 });
 

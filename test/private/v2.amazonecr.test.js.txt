@@ -8,26 +8,15 @@
  * Copyright (c) 2017, Joyent, Inc.
  */
 
-var assert = require('assert-plus');
-var crypto = require('crypto');
-var path = require('path');
-var test = require('tape');
-
-var drc = require('..');
-
-
 // --- globals
-
-var log = require('./lib/log');
 
 var CONFIG;
 try {
-    CONFIG = require(__dirname + '/config.json').amazonecr;
-    assert.object(CONFIG, 'config.json#amazonecr');
-    assert.string(CONFIG.repo, 'CONFIG.repo');
-    assert.string(CONFIG.tag, 'CONFIG.tag');
-    assert.string(CONFIG.username, 'CONFIG.username');
-    assert.string(CONFIG.password, 'CONFIG.password');
+    CONFIG = JSON.parse(await Deno.readTextFile(new URL('config.json', import.meta.url))).amazonecr;
+    assert(CONFIG.repo, 'CONFIG.repo');
+    assert(CONFIG.tag, 'CONFIG.tag');
+    assert(CONFIG.username, 'CONFIG.username');
+    assert(CONFIG.password, 'CONFIG.password');
 } catch (e) {
     CONFIG = null;
     log.warn(e, 'skipping Amazon ECR repo tests: ' +

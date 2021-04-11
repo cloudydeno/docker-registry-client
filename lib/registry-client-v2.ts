@@ -5,24 +5,26 @@
  */
 
 import { Sha256 } from "https://deno.land/std@0.92.0/hash/sha256.ts";
+import * as Base64url from "https://deno.land/std@0.92.0/encoding/base64url.ts";
 
 import {
     parseIndex, parseRepo,
     isLocalhost,
     urlFromIndex,
     DEFAULT_USERAGENT,
-splitIntoTwo,
+    splitIntoTwo,
 } from "./common.ts";
 import {
     Manifest,
     RegistryIndex, RegistryImage,
     RegistryClientOpts,
     AuthInfo,
-TagList,
+    TagList,
+    ManifestV1,
 } from "./types.ts";
 import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
-import { BadDigestError, DownloadError, InvalidContentError, TooManyRedirectsError } from "./errors.ts";
+import * as e from "./errors.ts";
 
 /*
  * Copyright 2017 Joyent, Inc.
@@ -372,78 +374,83 @@ function _parseWWWAuthenticate(header: string) {
  *
  */
 /* END JSSTYLED */
-// function _jwsFromManifest(manifest: unknown, body: Uint8Array) {
-//     var formatLength;
-//     var formatTail;
-//     var jws = {
-//         signatures: []
-//     };
+function _jwsFromManifest(manifest: ManifestV1, body: Uint8Array) {
+    var formatLength;
+    var formatTail;
+    var jws = {
+        payload: new Uint8Array(),
+        signatures: new Array<{
+            header: {
+                alg: any;
+                chain: any;
+            };
+            signature: string;
+            protected: string;
+        }>(),
+    };
 
-//     for (var i = 0; i < manifest.signatures.length; i++) {
-//         var sig = manifest.signatures[i];
+    for (var i = 0; i < manifest.signatures!.length; i++) {
+        var sig = manifest.signatures![i];
 
-//         try {
-//             var protectedHeader = JSON.parse(
-//                 base64url.decode(sig['protected']));
-//         } catch (protectedErr) {
-//             throw new restifyErrors.InvalidContentError(protectedErr, fmt(
-//                 'could not parse manifest "signatures[%d].protected": %j',
-//                 i, sig['protected']));
-//         }
-//         if (isNaN(protectedHeader.formatLength)) {
-//             throw new restifyErrors.InvalidContentError(fmt(
-//                 'invalid "formatLength" in "signatures[%d].protected": %j',
-//                 i, protectedHeader.formatLength));
-//         } else if (formatLength === undefined) {
-//             formatLength = protectedHeader.formatLength;
-//         } else if (protectedHeader.formatLength !== formatLength) {
-//             throw new restifyErrors.InvalidContentError(fmt(
-//                 'conflicting "formatLength" in "signatures[%d].protected": %j',
-//                 i, protectedHeader.formatLength));
-//         }
+        try {
+            var protectedHeader = JSON.parse(
+                new TextDecoder().decode(Base64url.decode(sig['protected'])));
+        } catch (protectedErr) {
+            throw new e.InvalidContentError(
+                `could not parse manifest "signatures[${i}].protected": ${sig['protected']}: ${protectedErr.message}`);
+        }
+        if (isNaN(protectedHeader.formatLength)) {
+            throw new e.InvalidContentError(
+                `invalid "formatLength" in "signatures[${i}].protected": ${protectedHeader.formatLength}`);
+        } else if (formatLength === undefined) {
+            formatLength = protectedHeader.formatLength;
+        } else if (protectedHeader.formatLength !== formatLength) {
+            throw new e.InvalidContentError(
+                `conflicting "formatLength" in "signatures[${i}].protected": ${protectedHeader.formatLength}`);
+        }
 
-//         if (!protectedHeader.formatTail ||
-//             typeof (protectedHeader.formatTail) !== 'string')
-//         {
-//             throw new restifyErrors.InvalidContentError(fmt(
-//                 'missing "formatTail" in "signatures[%d].protected"', i));
-//         }
-//         var formatTail_ = base64url.decode(protectedHeader.formatTail);
-//         if (formatTail === undefined) {
-//             formatTail = formatTail_;
-//         } else if (formatTail_ !== formatTail) {
-//             throw new restifyErrors.InvalidContentError(fmt(
-//                 'conflicting "formatTail" in "signatures[%d].protected": %j',
-//                 i, formatTail_));
-//         }
+        if (!protectedHeader.formatTail ||
+            typeof (protectedHeader.formatTail) !== 'string')
+        {
+            throw new e.InvalidContentError(
+                `missing "formatTail" in "signatures[${i}].protected"`);
+        }
+        var formatTail_ = new TextDecoder().decode(Base64url.decode(protectedHeader.formatTail));
+        if (formatTail === undefined) {
+            formatTail = formatTail_;
+        } else if (formatTail_ !== formatTail) {
+            throw new e.InvalidContentError(
+                `conflicting "formatTail" in "signatures[${i}].protected": ${formatTail_}`);
+        }
 
-//         var jwsSig = {
-//             header: {
-//                 alg: sig.header.alg,
-//                 chain: sig.header.chain
-//             },
-//             signature: sig.signature,
-//             'protected': sig['protected']
-//         };
-//         if (sig.header.jwk) {
-//             try {
-//                 jwsSig.header.jwk = jwkToPem(sig.header.jwk);
-//             } catch (jwkErr) {
-//                 throw new restifyErrors.InvalidContentError(jwkErr, fmt(
-//                     'error in "signatures[%d].header.jwk": %s',
-//                     i, jwkErr.message));
-//             }
-//         }
-//         jws.signatures.push(jwsSig);
-//     }
+        var jwsSig = {
+            header: {
+                alg: sig.header.alg,
+                chain: sig.header.chain,
+                jwk: sig.header.jwk,
+            },
+            signature: sig.signature,
+            'protected': sig['protected'],
+        };
+        // if (sig.header.jwk) {
+        //     try {
+        //         jwsSig.header.jwk = jwkToPem(sig.header.jwk);
+        //     } catch (jwkErr) {
+        //         throw new e.InvalidContentError(
+        //             `error in "signatures[${i}].header.jwk": ${jwkErr.message}`);
+        //     }
+        // }
+        jws.signatures.push(jwsSig);
+    }
 
-//     jws.payload = Buffer.concat([
-//         body.slice(0, formatLength),
-//         new Buffer(formatTail)
-//     ]);
+    const tail = new TextEncoder().encode(formatTail);
+    const buf = new Uint8Array(formatLength + tail.byteLength);
+    buf.set(body.subarray(0, formatLength), 0);
+    buf.set(tail, formatLength);
+    jws.payload = buf;
 
-//     return jws;
-// }
+    return jws;
+}
 
 
 /*
@@ -452,15 +459,15 @@ function _parseWWWAuthenticate(header: string) {
  * @throws {BadDigestError} if the value is missing or malformed
  */
 function _parseDockerContentDigest(dcd: string) {
-    if (!dcd) throw new BadDigestError(
+    if (!dcd) throw new e.BadDigestError(
         'missing "Docker-Content-Digest" header');
     const errPre = `could not parse Docker-Content-Digest header "${dcd}": `;
 
     // E.g. docker-content-digest: sha256:887f7ecfd0bda3...
     var parts = splitIntoTwo(dcd, ':');
-    if (parts.length !== 2) throw new BadDigestError(
+    if (parts.length !== 2) throw new e.BadDigestError(
         errPre + JSON.stringify(dcd));
-    if (parts[0] !== 'sha256') throw new BadDigestError(
+    if (parts[0] !== 'sha256') throw new e.BadDigestError(
         errPre + 'Unsupported hash algorithm ' + JSON.stringify(parts[0]));
 
     return {
@@ -469,7 +476,7 @@ function _parseDockerContentDigest(dcd: string) {
         expectedDigest: parts[1],
         startHash() { switch (this.algorithm) {
             case 'sha256': return new Sha256();
-            default: throw new BadDigestError(`Unsupported hash algorithm ${this.algorithm}`);
+            default: throw new e.BadDigestError(`Unsupported hash algorithm ${this.algorithm}`);
         } },
         get validationStream() {
             const hash = this.startHash();
@@ -481,7 +488,7 @@ function _parseDockerContentDigest(dcd: string) {
                 flush: (controller) => {
                     const digest = hash.hex();
                     if (this.expectedDigest === digest) return;
-                    controller.error(new BadDigestError(`Docker-Content-Digest (${this.expectedDigest} vs ${digest})`));
+                    controller.error(new e.BadDigestError(`Docker-Content-Digest (${this.expectedDigest} vs ${digest})`));
                 },
             })
         }
@@ -493,7 +500,7 @@ function _parseDockerContentDigest(dcd: string) {
  *
  * @throws {BadDigestError} if the digest doesn't check out.
  */
-function _verifyManifestDockerContentDigest(res: Response, jws: {payload: string}) {
+function _verifyManifestDockerContentDigest(res: Response, jws: {payload: Uint8Array}) {
     var dcdInfo = _parseDockerContentDigest(
         res.headers.get('docker-content-digest') ?? '');
 
@@ -504,7 +511,7 @@ function _verifyManifestDockerContentDigest(res: Response, jws: {payload: string
         // res.log.trace({expectedDigest: dcdInfo.expectedDigest,
         //     header: dcdInfo.raw, digest: digest},
         //     'Docker-Content-Digest failure');
-        throw new BadDigestError(`Docker-Content-Digest (${dcdInfo.expectedDigest} vs ${digest})`);
+        throw new e.BadDigestError(`Docker-Content-Digest (${dcdInfo.expectedDigest} vs ${digest})`);
     }
 }
 
@@ -570,33 +577,33 @@ function _verifyManifestDockerContentDigest(res: Response, jws: {payload: string
  * @returns {String} The docker digest string.
  * @throws {InvalidContentError} if there is a problem parsing the manifest.
  */
-// export function digestFromManifestStr(manifestStr: string): string {
-//     var hash = new Sha256();
-//     var digestPrefix = 'sha256:';
+export function digestFromManifestStr(manifestStr: string): string {
+    var hash = new Sha256();
+    var digestPrefix = 'sha256:';
 
-//     var manifest;
-//     try {
-//         manifest = JSON.parse(manifestStr);
-//     } catch (err) {
-//         throw new Error(`could not parse manifest: ${err.message}\n${manifestStr}`);
-//     }
-//     if (manifest.schemaVersion === 1) {
-//         try {
-//             var manifestBuffer = new TextEncoder().encode(manifestStr);
-//             var jws = _jwsFromManifest(manifest, manifestBuffer);
-//             hash.update(jws.payload, 'binary');
-//             return digestPrefix + hash.digest('hex');
-//         } catch (verifyErr) {
-//             if (!(verifyErr instanceof restifyErrors.InvalidContentError)) {
-//                 throw verifyErr;
-//             }
-//             // Couldn't parse (or doesn't have) the signatures section,
-//             // fall through.
-//         }
-//     }
-//     hash.update(manifestStr);
-//     return digestPrefix + hash.digest('hex');
-// }
+    var manifest;
+    try {
+        manifest = JSON.parse(manifestStr);
+    } catch (err) {
+        throw new Error(`could not parse manifest: ${err.message}\n${manifestStr}`);
+    }
+    if (manifest.schemaVersion === 1) {
+        try {
+            var manifestBuffer = new TextEncoder().encode(manifestStr);
+            var jws = _jwsFromManifest(manifest, manifestBuffer);
+            hash.update(jws.payload);
+            return digestPrefix + hash.hex();
+        } catch (verifyErr) {
+            if (!(verifyErr instanceof e.InvalidContentError)) {
+                throw verifyErr;
+            }
+            // Couldn't parse (or doesn't have) the signatures section,
+            // fall through.
+        }
+    }
+    hash.update(manifestStr);
+    return digestPrefix + hash.hex();
+}
 
 
 export class RegistryClientV2 {
@@ -996,22 +1003,22 @@ export class RegistryClientV2 {
         const manifest: Manifest = await resp.dockerJson();
 
         if (manifest.schemaVersion === 1) {
+            var jws = _jwsFromManifest(manifest, await resp.dockerBody());
+            // Some v2 registries (Amazon ECR) do not provide the
+            // 'docker-content-digest' header.
+            if (resp.headers.has('docker-content-digest')) {
+                _verifyManifestDockerContentDigest(resp, jws);
+            } else {
+                // this.log.debug({headers: resp.headers},
+                //     'no Docker-Content-Digest header on ' +
+                //     'getManifest response');
+            }
             // TODO
-            // var jws = _jwsFromManifest(manifest, body);
-            // // Some v2 registries (Amazon ECR) do not provide the
-            // // 'docker-content-digest' header.
-            // if (resp.headers.has('docker-content-digest')) {
-            //     _verifyManifestDockerContentDigest(resp, jws);
-            // } else {
-            //     // this.log.debug({headers: resp.headers},
-            //     //     'no Docker-Content-Digest header on ' +
-            //     //     'getManifest response');
-            // }
             // _verifyJws(jws);
         }
 
         if (manifest.schemaVersion > maxSchemaVersion) {
-            throw new InvalidContentError(
+            throw new e.InvalidContentError(
                 `unsupported schema version ${manifest.schemaVersion
                 } in ${this.repo.localName}:${opts.ref} manifest`);
         }
@@ -1021,7 +1028,7 @@ export class RegistryClientV2 {
         if (manifest.schemaVersion === 1) {
             layers = manifest.fsLayers;
             if (layers!.length !== manifest.history!.length) {
-                throw new InvalidContentError(
+                throw new e.InvalidContentError(
                     'history length not equal to layers length in '
                     + `${this.repo.localName}:${opts.ref} manifest`);
             }
@@ -1033,7 +1040,7 @@ export class RegistryClientV2 {
             }
         }
         if (!layers || layers.length === 0) {
-            throw new InvalidContentError(
+            throw new e.InvalidContentError(
                 `no layers or manifests in ${this.repo.localName}:${opts.ref} manifest`);
         }
 
@@ -1117,7 +1124,7 @@ export class RegistryClientV2 {
             await resp.dockerBody();
         }
 
-        throw new TooManyRedirectsError(`maximum number of redirects (${maxRedirects}) hit`);
+        throw new e.TooManyRedirectsError(`maximum number of redirects (${maxRedirects}) hit`);
     };
 
 
@@ -1245,7 +1252,7 @@ export class RegistryClientV2 {
         if (dcdHeader) {
             const dcdInfo = _parseDockerContentDigest(dcdHeader);
             if (dcdInfo.raw !== opts.digest) {
-                throw new BadDigestError(
+                throw new e.BadDigestError(
                     `Docker-Content-Digest header, ${dcdInfo.raw}, does not match ` +
                     `given digest, ${opts.digest}`);
             }

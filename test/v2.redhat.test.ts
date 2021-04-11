@@ -12,10 +12,13 @@
  * Test v2 Registry API against <registry.access.redhat.com>.
  */
 
-import { assertEquals, assert } from "https://deno.land/std@0.92.0/testing/asserts.ts";
+
+import {
+    assert, assertEquals, assertThrowsHttp,
+} from "./util.ts";
+
 import { createClient } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
-import { assertThrowsHttp } from "./util.ts";
 
 // --- globals
 

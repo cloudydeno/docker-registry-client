@@ -118,63 +118,9 @@ If a scheme isn't given, then "https" is assumed.
 
 ## Usage
 
-Simple usage will look like this:
-
-```typescript
-import { createClient } from 'https://deno.land/x/docker_registry_client/registry-client-v2.ts';
-var REPO = 'alpine';
-var client = createClient({name: REPO});
-
-const tags = await client.listTags();
-// ...
-console.log(JSON.stringify(tags, null, 4));
-```
-
-If you need to authenticate, the createClient call might look more like this:
-
-```typescript
-import { createClient } from 'https://deno.land/x/docker_registry_client/registry-client-v2.ts';
-
-var REPO = 'alpine';
-var client = createClient({
-    name: REPO,
-    // Optional basic auth to the registry
-    username: <username>,
-    password: <password>,
-    // Optional, for a registry without a signed TLS certificate.
-    // NOTE: Deno does not currently support this option
-    // insecure: <true|false>,
-    // ... see the source code for other options
-});
-```
-
-NOTE: This port does not include v1 support
-
+Check out [the README in lib/](./lib/README.md).
 
 ## v2 API
-
-A mapping of the [Docker Registry API v2
-endpoints](https://docs.docker.com/registry/spec/api/#detail) to the API
-equivalents in this client lib.
-
-| Name / Endpoint      | Implemented | Description |
-| -------------------- | ----------- | ----------- |
-| ping <br> `GET /v2/`                | Yes  | Check that the endpoint implements Docker Registry API V2. |
-| listTags <br> `GET /v2/<name>/tags/list`            | Yes  | Fetch the tags under the repository identified by `name`. |
-| getManifest <br> `GET /v2/<name>/manifests/<reference>`         | Yes* | Fetch the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
-| putManifest <br> `PUT /v2/<name>/manifests/<reference>`         | No   | Put the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
-| deleteManifest <br> `DELETE /v2/<name>/manifests/<reference>`      | Yes  | Delete the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
-| createBlobReadStream <br> `GET /v2/<name>/blobs/<digest>` | No*  | Retrieve the blob from the registry identified by `digest`. |
-| headBlob <br> `HEAD /v2/<name>/blobs/<digest>`            | No*  | Retrieve the blob from the registry identified by `digest` -- just the headers. |
-| startBlobUpload <br> `POST /v2/<name>/blobs/uploads/`     | No   | Initiate a resumable blob upload. If successful, an upload location will be provided to complete the upload. Optionally, if the `digest` parameter is present, the request body will be used to complete the upload in a single request. |
-| getBlobUploadStatus <br> `GET /v2/<name>/blobs/uploads/<uuid>` | No   | Retrieve status of upload identified by `uuid`. The primary purpose of this endpoint is to resolve the current status of a resumable upload. |
-| uploadBlobChunk <br> `PATCH /v2/<name>/blobs/uploads/<uuid>`     | No   | Upload a chunk of data for the specified upload. |
-| completeBlobUpload <br> `PUT /v2/<name>/blobs/uploads/<uuid>`  | No   | Complete the upload specified by `uuid`, optionally appending the body as the final chunk. |
-| cancelBlobUpload <br> `DELETE /v2/<name>/blobs/uploads/<uuid>`    | No   | Cancel outstanding upload processes, releasing associated resources. If this is not called, the unfinished uploads will eventually timeout. |
-| deleteBlob <br> `DELETE /v2/<name>/blobs/<digest>`          | No   | Delete the blob identified by `name` and `digest`. Warning: From the Docker spec I'm not sure that `deleteBlob` doesn't corrupt images if you delete a shared blob. |
-| listRepositories <br> `GET /v2/_catalog/`    | No   | List all repositories in this registry. [Spec.](https://docs.docker.com/registry/spec/api/#listing-repositories) |
-
-*: Endpoints with Javascript implementations that haven't been partially fully ported to Deno / Typescript yet.
 
 See ["examples/v2/*.ts"](./examples/) for short code examples one can run from
 the CLI for each API endpoint. E.g.:

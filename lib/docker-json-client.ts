@@ -4,6 +4,8 @@
  */
 
 import { Md5 } from "https://deno.land/std@0.92.0/hash/md5.ts";
+import { HttpError } from "./errors.ts";
+import { DockerResponse as DockerResponseInterface } from "./types.ts";
 
 // --- API
 
@@ -28,14 +30,13 @@ export class DockerJsonClient {
         accept?: string;
         contentType?: string;
         url: string;
-        rejectUnauthorized?: boolean;
+        // rejectUnauthorized?: boolean;
         userAgent: string;
     }) {
         this.accept = options.accept ?? 'application/json';
         this.name = options.name ?? 'DockerJsonClient';
         this.contentType = options.contentType ?? 'application/json';
         this.url = options.url;
-        // this.rejectUnauthorized = options.rejectUnauthorized;
         this.userAgent = options.userAgent;
     }
 
@@ -56,23 +57,14 @@ export class DockerJsonClient {
         const expectStatus = opts.expectStatus ?? [200];
         if (!expectStatus.includes(rawResp.status)) {
             throw await resp
-                .dockerError(`Received unexpected HTTP ${rawResp.status} from ${opts.path}`)
-                .catch(err => new Error(`Received unexpected HTTP ${rawResp.status} from ${opts.path} - and failed to parse error body: ${err.message}`));
+                .dockerThrowable(`Unexpected HTTP ${rawResp.status} from ${opts.path}`);
         }
         return resp;
     }
-
-    async get(opts: HttpReqOpts) {
-        return await this.request({
-            method: 'GET',
-            ...opts,
-        });
-    }
-
 };
 
 
-export class DockerResponse extends Response {
+export class DockerResponse extends Response implements DockerResponseInterface {
     // Cache the body once we decode it once.
     decodedBody?: Uint8Array;
 
@@ -109,40 +101,42 @@ export class DockerResponse extends Response {
         }
     }
 
-    async dockerError(baseMsg: string) {
-        let message = '';
-        let restText = '';
-        let restCode = '';
+    async dockerErrors(): Promise<Array<{
+        code?: string;
+        message: string;
+        detail?: string;
+    }>> {
+        const obj = await this.dockerJson().catch(() => null);
 
-        if (this.status >= 400) {
-            // Upcast error to a RestError (if we can)
-            // Be nice and handle errors like
-            // { error: { code: '', message: '' } }
-            // in addition to { code: '', message: '' }.
-            const obj = await this.dockerJson().catch(() => null);
-            let errObj = obj?.error ?? obj?.errors?.[0] ?? obj;
-            if (errObj?.code || errObj?.message) {
-                restCode = errObj.code || '';
-                restText = errObj.message || '';
-                if (restCode && restText) {
-                    message = `(${restCode}) ${restText}`;
+        // Upcast error to a RestError (if we can)
+        // Be nice and handle errors like
+        // { error: { code: '', message: '' } }
+        // in addition to { code: '', message: '' }.
+        let errObj = obj?.error ? [obj.error] : (obj?.errors as any[]) ?? (obj ? [obj] : []);
+        return errObj.filter(x => typeof x.message === 'string');
+    }
+
+    async dockerThrowable(baseMsg: string): Promise<HttpError> {
+        // no point trying to parse HTML
+        if (this.headers.get('content-type')?.startsWith('text/html')) {
+            await this.arrayBuffer();
+            return new HttpError(this, [], `${baseMsg} (w/ HTML body)`);
+        }
+
+        try {
+            const errors = this.status >= 400 ? await this.dockerErrors() : [];
+            if (errors.length === 0) {
+                const text = new TextDecoder().decode(await this.dockerBody());
+                if (text.length > 1) {
+                    errors.push({ message: text.slice(0, 512) });
                 }
             }
-        }
+            const errorTexts = errors.map(x => '    '+[x.code, x.message, x.detail ? JSON.stringify(x.detail) : ''].filter(x => x).join(': '));
 
-        if (!message) {
-            if (this.headers.get('content-type')?.startsWith('text/html')) {
-                message = '(HTML body)';
-            } else {
-                message = new TextDecoder().decode(await this.dockerBody()).slice(0, 1024);
-            }
+            return new HttpError(this, errors, [baseMsg, ...errorTexts].join('\n'));
+        } catch (err) {
+            return new HttpError(this, [], `${baseMsg} - and failed to parse error body: ${err.message}`);
         }
-
-        const err = new Error(`${baseMsg}: ${message}`);
-        (err as any).resp = this;
-        (err as any).restCode = restCode;
-        (err as any).restText = restText;
-        return err;
     }
 
     dockerStream() {

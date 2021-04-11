@@ -8,11 +8,12 @@
  * Copyright (c) 2017, Joyent, Inc.
  */
 
-import { assertEquals, assert, assertThrowsAsync } from "https://deno.land/std@0.92.0/testing/asserts.ts";
+import { assertEquals, assert } from "https://deno.land/std@0.92.0/testing/asserts.ts";
 import { createClient, MEDIATYPE_MANIFEST_LIST_V2 } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
 import { ManifestV2 } from "../lib/types.ts";
 import { Sha256 } from "https://deno.land/std@0.92.0/hash/sha256.ts";
+import { assertThrowsHttp } from "./util.ts";
 
 // --- globals
 
@@ -113,9 +114,9 @@ Deno.test('v2 gcr.io / getManifest (by digest)', async () => {
 
 Deno.test('v2 gcr.io / getManifest (unknown tag)', async () => {
     const client = createClient(clientOpts);
-    await assertThrowsAsync(async () => {
+    await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'unknowntag'});
-    }, Error, ' 404 ');
+    }, 404);
 });
 
 Deno.test('v2 gcr.io / getManifest (unknown repo)', async () => {
@@ -123,9 +124,9 @@ Deno.test('v2 gcr.io / getManifest (unknown repo)', async () => {
         maxSchemaVersion: 2,
         name: 'unknownreponame',
     });
-    await assertThrowsAsync(async () => {
+    await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'latest'});
-    }, Error, 'Not Found');
+    }, 401);
 });
 
 Deno.test('v2 gcr.io / getManifest (bad username/password)', async () => {
@@ -136,9 +137,9 @@ Deno.test('v2 gcr.io / getManifest (bad username/password)', async () => {
         password: 'fredForgot',
         // log: log
     });
-    await assertThrowsAsync(async () => {
+    await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'latest'});
-    }, Error, ' 401 ');
+    }, 401);
 });
 
 Deno.test('v2 gcr.io / headBlob', async () => {
@@ -185,9 +186,9 @@ Deno.test('v2 gcr.io / headBlob', async () => {
 
 Deno.test('v2 gcr.io / headBlob (unknown digest)', async () => {
     const client = createClient(clientOpts);
-    await assertThrowsAsync(async () => {
+    await assertThrowsHttp(async () => {
         await client.headBlob({digest: 'cafebabe'});
-    }, Error, ' 400 '); // seems to be the latest code for this
+    }, 400); // seems to be the latest code for this
 
     // - docker.io gives 404, which is what I'd expect
     // - gcr.io gives 400? Hrm.
@@ -244,9 +245,9 @@ Deno.test('v2 gcr.io / createBlobReadStream', async () => {
 
 Deno.test('v2 gcr.io / createBlobReadStream (unknown digest)', async () => {
     const client = createClient({ repo });
-    await assertThrowsAsync(async () => {
+    await assertThrowsHttp(async () => {
         await client.createBlobReadStream({digest: 'cafebabe'})
-    }, Error, ' 400 ');
+    }, 400);
     // - docker.io gives 404, which is what I'd expect
     // - gcr.io gives 400? Hrm.
     // The spec doesn't specify:

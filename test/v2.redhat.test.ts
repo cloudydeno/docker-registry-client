@@ -12,9 +12,10 @@
  * Test v2 Registry API against <registry.access.redhat.com>.
  */
 
-import { assertEquals, assert, assertThrowsAsync } from "https://deno.land/std@0.92.0/testing/asserts.ts";
+import { assertEquals, assert } from "https://deno.land/std@0.92.0/testing/asserts.ts";
 import { createClient } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
+import { assertThrowsHttp } from "./util.ts";
 
 // --- globals
 
@@ -52,10 +53,10 @@ Deno.test('v2 registry.access.redhat.com / ping', async () => {
 
 Deno.test('v2 registry.access.redhat.com / getManifest (no redirects)', async () => {
     const client = createClient(clientOpts);
-    // Should get a 302 error.
-    await assertThrowsAsync(async () => {
+    const {resp} = await assertThrowsHttp(async () => {
         await client.getManifest({ref: TAG, followRedirects: false});
-    }, Error, ' 302 ');
+    });
+    assertEquals(resp.status, 302);
 });
 
 Deno.test('v2 registry.access.redhat.com / getManifest (redirected)', async () => {

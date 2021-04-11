@@ -8,12 +8,13 @@
  * Copyright (c) 2017, Joyent, Inc.
  */
 
-import { assertEquals, assert, assertThrowsAsync } from "https://deno.land/std@0.92.0/testing/asserts.ts";
+import { assertEquals, assert } from "https://deno.land/std@0.92.0/testing/asserts.ts";
 import { createClient } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
 import { ManifestV1 } from "../lib/types.ts";
 import { dirname } from "https://deno.land/std@0.92.0/path/posix.ts";
 import { Sha256 } from "https://deno.land/std@0.92.0/hash/sha256.ts";
+import { assertThrowsHttp } from "./util.ts";
 
 // --- globals
 
@@ -105,9 +106,9 @@ Deno.test('v2 quay.io / getManifest (by digest)', async () => {
 
 Deno.test('v2 quay.io / getManifest (unknown tag)', async () => {
     const client = createClient({ repo });
-    await assertThrowsAsync(async () => {
+    await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'unknowntag'});
-    }, Error, ' 404 ');
+    }, 404);
 });
 
 Deno.test('v2 quay.io / getManifest (unknown repo)', async () => {
@@ -116,9 +117,9 @@ Deno.test('v2 quay.io / getManifest (unknown repo)', async () => {
         name: dirname(REPO) + '/unknownreponame',
         // log: log
     });
-    await assertThrowsAsync(async () => {
+    await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'latest'});
-    }, Error, 'Not Found');
+    }, 401);
 });
 
 Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
@@ -129,9 +130,9 @@ Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
         password: 'fredForgot',
         // log: log
     });
-    await assertThrowsAsync(async () => {
+    await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'latest'});
-    }, Error, ' 401 ');
+    }, 401);
 });
 
 Deno.test('v2 quay.io / headBlob', async () => {
@@ -169,16 +170,16 @@ Deno.test('v2 quay.io / headBlob', async () => {
 Deno.test('v2 quay.io / headBlob (unknown digest)', async () => {
     const client = createClient({ repo });
 
-    await assertThrowsAsync(async () => {
+    const {resp} = await assertThrowsHttp(async () => {
         await client.headBlob({digest: 'cafebabe'});
-    }, Error, ' 405 ');
+    }, 405);
     // - docker.io gives 404, which is what I'd expect
     // - quay.io gives 405 (Method Not Allowed). Hrm.
     // The spec doesn't specify:
     // https://docs.docker.com/registry/spec/api/#existing-layers
 
     // docker.io includes this header here, quay.io does not.
-    // assertEquals(res.headers['docker-distribution-api-version'],
+    // assertEquals(resp.headers.get('docker-distribution-api-version'),
     //    'registry/2.0');
 });
 
@@ -219,9 +220,9 @@ Deno.test('v2 quay.io / createBlobReadStream', async () => {
 
 Deno.test('v2 quay.io / createBlobReadStream (unknown digest)', async () => {
     const client = createClient({ repo });
-    await assertThrowsAsync(async () => {
-        await client.createBlobReadStream({digest: 'cafebabe'})
-    }, Error, ' 405 '); // Not too sure why this is a 405 instead of a 404
+    await assertThrowsHttp(async () => {
+        await client.createBlobReadStream({digest: 'cafebabe'});
+    }, 405); // Not too sure why this is a 405 instead of a 404
 
     // Docker-Distribution-Api-Version header:
     // docker.io includes this header here, quay.io does not.

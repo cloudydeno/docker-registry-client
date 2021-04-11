@@ -22,6 +22,7 @@ TagList,
 } from "./types.ts";
 import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
+import { BadDigestError, DownloadError, InvalidContentError, TooManyRedirectsError } from "./errors.ts";
 
 /*
  * Copyright 2017 Joyent, Inc.
@@ -122,6 +123,8 @@ function _getRegistryErrorMessage(err: any) {
         return err.errors[0].message;
     } else if (err.message) {
         return err.message;
+    } else if (err.details) {
+        return err.details;
     }
     return err.toString();
 }
@@ -449,15 +452,15 @@ function _parseWWWAuthenticate(header: string) {
  * @throws {BadDigestError} if the value is missing or malformed
  */
 function _parseDockerContentDigest(dcd: string) {
-    if (!dcd) throw new Error(
+    if (!dcd) throw new BadDigestError(
         'missing "Docker-Content-Digest" header');
     const errPre = `could not parse Docker-Content-Digest header "${dcd}": `;
 
     // E.g. docker-content-digest: sha256:887f7ecfd0bda3...
     var parts = splitIntoTwo(dcd, ':');
-    if (parts.length !== 2) throw new Error(
+    if (parts.length !== 2) throw new BadDigestError(
         errPre + JSON.stringify(dcd));
-    if (parts[0] !== 'sha256') throw new Error(
+    if (parts[0] !== 'sha256') throw new BadDigestError(
         errPre + 'Unsupported hash algorithm ' + JSON.stringify(parts[0]));
 
     return {
@@ -466,7 +469,7 @@ function _parseDockerContentDigest(dcd: string) {
         expectedDigest: parts[1],
         startHash() { switch (this.algorithm) {
             case 'sha256': return new Sha256();
-            default: throw new Error(`Unsupported hash algorithm ${this.algorithm}`);
+            default: throw new BadDigestError(`Unsupported hash algorithm ${this.algorithm}`);
         } },
         get validationStream() {
             const hash = this.startHash();
@@ -478,7 +481,7 @@ function _parseDockerContentDigest(dcd: string) {
                 flush: (controller) => {
                     const digest = hash.hex();
                     if (this.expectedDigest === digest) return;
-                    controller.error(new Error(`BadDigestError: Docker-Content-Digest (${this.expectedDigest} vs ${digest})`));
+                    controller.error(new BadDigestError(`Docker-Content-Digest (${this.expectedDigest} vs ${digest})`));
                 },
             })
         }
@@ -501,7 +504,7 @@ function _verifyManifestDockerContentDigest(res: Response, jws: {payload: string
         // res.log.trace({expectedDigest: dcdInfo.expectedDigest,
         //     header: dcdInfo.raw, digest: digest},
         //     'Docker-Content-Digest failure');
-        throw new Error(`BadDigestError: Docker-Content-Digest (${dcdInfo.expectedDigest} vs ${digest})`);
+        throw new BadDigestError(`Docker-Content-Digest (${dcdInfo.expectedDigest} vs ${digest})`);
     }
 }
 
@@ -703,11 +706,15 @@ export class RegistryClientV2 {
      *          200     Successful authentication. The response body is `body`
      *                  if wanted.
      */
-    async ping(opts: {headers?: Headers} = {}) {
-        const resp = await this._api.get({
+    async ping(opts: {
+        headers?: Headers,
+        expectStatus?: number[],
+    } = {}) {
+        const resp = await this._api.request({
+            method: 'GET',
             path: '/v2/',
             headers: opts.headers,
-            expectStatus: [200, 401, 404],
+            expectStatus: opts.expectStatus ?? [200, 401, 404],
             // Ping should be fast. We don't want 15s of retrying.
             retry: false,
             connectTimeout: 10000,
@@ -728,11 +735,6 @@ export class RegistryClientV2 {
      * This attempts to reproduce the logic of "docker.git:registry/auth.go#loginV2"
      *
      * @param opts {Object}
-     *      - opts.username {String} Optional. Username and password are optional
-     *        to allow `RegistryClientV2` to use `login` in the common case when
-     *        there may or may not be auth required.
-     *      - opts.password {String} Optional, but required if `opts.username` is
-     *        provided.
      *      - opts.scope {String} Optional. A scope string passed in for
      *        bearer/token auth. If this is just a login request where the token
      *        won't be used, then the empty string (the default) is sufficient.
@@ -747,51 +749,39 @@ export class RegistryClientV2 {
      *                          {type: 'None'}
      */
     async performLogin(opts: {
-        username?: string;
-        password?: string;
         scope?: string;
-        pingRes?: Response;
+        pingRes?: DockerResponse;
     }): Promise<AuthInfo> {
-        let chalHeader = opts.pingRes?.headers.get('www-authenticate');
-        if (!chalHeader) {
-            const res = await this.ping();
+        let res = opts.pingRes;
+        if (!res?.headers.get('www-authenticate')) {
+            res = await this.ping({
+                expectStatus: [200, 401],
+            });
             if (res.status === 200) {
                 // No authorization is necessary.
                 return { type: 'None' };
-            } else if (res.status === 401) {
-                chalHeader = res.headers.get('www-authenticate');
-            } else throw new Error(`HTTP ${res.status} from ping endpoint`);
+            }
         };
-        if (!chalHeader) throw new Error(
-            'missing WWW-Authenticate header in 401 ' +
-            'response to "GET /v2/" (see ' +
-            /* JSSTYLED */
+
+        const chalHeader = res.headers.get('www-authenticate');
+        if (!chalHeader) throw await res.dockerThrowable(
+            'missing WWW-Authenticate header from "GET /v2/" (see ' +
             'https://docs.docker.com/registry/spec/api/#api-version-check)');
+
         const authChallenge = _parseWWWAuthenticate(chalHeader);
-
-        if (authChallenge.scheme.toLowerCase() === 'basic') {
-            return {
-                type: 'Basic',
-                username: opts.username ?? '',
-                password: opts.password ?? ''
-            };
-        }
-
-        if (authChallenge.scheme.toLowerCase() === 'bearer') {
-            // log.debug({challenge: ctx.authChallenge},
-            //     'login: get Bearer auth token');
-            return {
-                type: 'Bearer',
-                token: await this._getToken({
-                    realm: authChallenge.parms.realm,
-                    service: authChallenge.parms.service,
-                    scopes: opts.scope ? [opts.scope] : [],
-                    username: opts.username,
-                    password: opts.password,
-                }),
-            };
-        }
-
+        if (authChallenge.scheme.toLowerCase() === 'basic') return {
+            type: 'Basic',
+            username: this.username ?? '',
+            password: this.password ?? ''
+        };
+        if (authChallenge.scheme.toLowerCase() === 'bearer') return {
+            type: 'Bearer',
+            token: await this._getToken({
+                realm: authChallenge.parms.realm,
+                service: authChallenge.parms.service,
+                scopes: opts.scope ? [opts.scope] : [],
+            }),
+        };
         throw new Error(
             `unsupported auth scheme: "${authChallenge.scheme}"`);
     }
@@ -805,8 +795,6 @@ export class RegistryClientV2 {
         realm: string;
         service?: string;
         scopes?: string[];
-        username?: string;
-        password?: string;
     }): Promise<string> {
         // - add https:// prefix (or http) if none on 'realm'
         var tokenUrl = opts.realm;
@@ -833,12 +821,12 @@ export class RegistryClientV2 {
                 query.append('scope', scope);  // intentionally singular 'scope'
             }
         }
-        if (opts.username) {
-            query.set('account', opts.username);
+        if (this.username) {
+            query.set('account', this.username);
             _setAuthHeaderFromAuthInfo(headers, {
                 type: 'Basic',
-                username: opts.username,
-                password: opts.password ?? '',
+                username: this.username,
+                password: this.password ?? '',
             });
         }
         if (query.toString()) {
@@ -849,9 +837,10 @@ export class RegistryClientV2 {
         var parsedUrl = new URL(tokenUrl);
         var client = new DockerJsonClient({
             url: parsedUrl.origin,
-            ...this._commonHttpClientOpts
+            ...this._commonHttpClientOpts,
         });
-        const resp = await client.get({
+        const resp = await client.request({
+            method: 'GET',
             path: parsedUrl.href.slice(parsedUrl.origin.length),
             headers: headers,
             expectStatus: [200, 401],
@@ -860,12 +849,12 @@ export class RegistryClientV2 {
             // Convert *all* 401 errors to use a generic error constructor
             // with a simple error message.
             var errMsg = _getRegistryErrorMessage(await resp.dockerJson());
-            throw new Error('Registry 401 - Auth failed: '+errMsg);
+            throw await resp.dockerThrowable('Registry auth failed: '+errMsg);
         }
         const body = await resp.dockerJson();
         if (typeof body.token !== 'string') {
-            console.log('auth resp:', body);
-            throw new Error('authorization ' +
+            console.error('TODO: auth resp:', body);
+            throw await resp.dockerThrowable('authorization ' +
                 'server did not include a token in the response');
         }
         return body.token;
@@ -888,17 +877,14 @@ export class RegistryClientV2 {
      * @param opts {Object} Optional.
      *      - opts.pingRes {Object} Optional. The response object from an earlier
      *        `ping()` call. This can be used to save re-pinging.
-     *      - opts.pingErr {Object} Required if `pingRes` given. The error
-     *        object for `pingRes`.
      *      - opts.scope {String} Optional. Scope to use in the auth Bearer token.
-     * @param cb {Function} `function (err)`
      *
      * Side-effects:
      * - On success, all of `this._loggedIn*`, `this._authInfo`, and
      *   `this._headers.authorization` are set.
      */
     async login(opts: {
-        pingRes?: Response;
+        pingRes?: DockerResponse;
         scope?: string;
     } = {}) {
         var scope = opts.scope || _makeAuthScope('repository', this.repo.remoteName!, this.scopes);
@@ -908,8 +894,6 @@ export class RegistryClientV2 {
         }
 
         const authInfo = await this.performLogin({
-            username: this.username,
-            password: this.password,
             pingRes: opts.pingRes,
             scope: scope,
         });
@@ -956,7 +940,8 @@ export class RegistryClientV2 {
 
     async listTags(): Promise<TagList> {
         await this.login();
-        const res = await this._api.get({
+        const res = await this._api.request({
+            method: 'GET',
             path: `/v2/${encodeURI(this.repo.remoteName!)}/tags/list`,
             headers: this._headers,
         });
@@ -996,25 +981,19 @@ export class RegistryClientV2 {
             headers.set('accept', accept.join(', '));
         }
 
-        const resp = await this._api.get({
+        const resp = await this._api.request({
+            method: 'GET',
             path: `/v2/${encodeURI(this.repo.remoteName ?? '')}/manifests/${encodeURI(opts.ref)}`,
             headers: headers,
             redirect: opts.followRedirects == false ? 'manual' : 'follow',
-            expectStatus: [200]
-        }).catch(err => {
-            if (err.resp?.status === 401) {
-                // Convert into a 404 error.
-                // If we get an Unauthorized error here, it actually
-                // means the repo does not exist, otherwise we should
-                // have received an unauthorized error during the
-                // doLogin step and this code path would not be taken.
-                var errMsg = _getRegistryErrorMessage(err);
-                throw new Error(`Docker registry 401 Not Found: ${errMsg}`);
-            }
-            throw err;
+            expectStatus: [200, 401],
         });
+        if (resp.status === 401) {
+            var errMsg = _getRegistryErrorMessage(await resp.dockerJson());
+            throw await resp.dockerThrowable(`Manifest ${JSON.stringify(opts.ref)} Not Found: ${errMsg}`);
+        }
 
-        const manifest = await resp.dockerJson() as Manifest;
+        const manifest: Manifest = await resp.dockerJson();
 
         if (manifest.schemaVersion === 1) {
             // TODO
@@ -1032,7 +1011,7 @@ export class RegistryClientV2 {
         }
 
         if (manifest.schemaVersion > maxSchemaVersion) {
-            throw new Error(
+            throw new InvalidContentError(
                 `unsupported schema version ${manifest.schemaVersion
                 } in ${this.repo.localName}:${opts.ref} manifest`);
         }
@@ -1042,7 +1021,7 @@ export class RegistryClientV2 {
         if (manifest.schemaVersion === 1) {
             layers = manifest.fsLayers;
             if (layers!.length !== manifest.history!.length) {
-                throw new Error(
+                throw new InvalidContentError(
                     'history length not equal to layers length in '
                     + `${this.repo.localName}:${opts.ref} manifest`);
             }
@@ -1054,7 +1033,7 @@ export class RegistryClientV2 {
             }
         }
         if (!layers || layers.length === 0) {
-            throw new Error(
+            throw new InvalidContentError(
                 `no layers or manifests in ${this.repo.localName}:${opts.ref} manifest`);
         }
 
@@ -1138,7 +1117,7 @@ export class RegistryClientV2 {
             await resp.dockerBody();
         }
 
-        throw new Error(`maximum number of redirects (${maxRedirects}) hit`);
+        throw new TooManyRedirectsError(`maximum number of redirects (${maxRedirects}) hit`);
     };
 
 
@@ -1149,7 +1128,6 @@ export class RegistryClientV2 {
         await this.login();
         return await this._makeHttpRequest({
             method: opts.method,
-            // url: this._url,
             path: `/v2/${encodeURI(this.repo.remoteName ?? '')}/blobs/${encodeURI(opts.digest)}`,
             headers: this._headers,
         });
@@ -1267,7 +1245,7 @@ export class RegistryClientV2 {
         if (dcdHeader) {
             const dcdInfo = _parseDockerContentDigest(dcdHeader);
             if (dcdInfo.raw !== opts.digest) {
-                throw new Error(
+                throw new BadDigestError(
                     `Docker-Content-Digest header, ${dcdInfo.raw}, does not match ` +
                     `given digest, ${opts.digest}`);
             }
@@ -1275,7 +1253,6 @@ export class RegistryClientV2 {
             stream = stream.pipeThrough(dcdInfo.validationStream);
         } else {
             // stream.log.debug({headers: ress[0].headers},
-            console.debug('no Docker-Content-Digest header on GetBlob response');
         }
 
         return { ress, stream };

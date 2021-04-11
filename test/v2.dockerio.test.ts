@@ -8,17 +8,17 @@
  * Copyright (c) 2017, Joyent, Inc.
  */
 
-import { assertEquals, assert, assertThrowsAsync } from "https://deno.land/std@0.92.0/testing/asserts.ts";
+import { assertEquals, assert } from "https://deno.land/std@0.92.0/testing/asserts.ts";
 import { createClient, MEDIATYPE_MANIFEST_LIST_V2 } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
 import { Manifest, ManifestV2 } from "../lib/types.ts";
 import { Sha256 } from "https://deno.land/std@0.92.0/hash/sha256.ts";
+import { assertThrowsHttp } from "./util.ts";
 
 // --- globals
 
 const REPO = 'busybox';
 const TAG = 'latest';
-
 
 // --- Helper functions.
 
@@ -197,9 +197,9 @@ Deno.test('v2 docker.io / getManifest (by digest)', async () => {
 
 Deno.test('v2 docker.io / getManifest (unknown tag)', async () => {
     const client = createClient({ repo });
-    await assertThrowsAsync(async () => {
+    await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'unknowntag'});
-    }, Error, ' 404 ');
+    }, 404);
 });
 
 Deno.test('v2 docker.io / getManifest (unknown repo)', async () => {
@@ -207,9 +207,9 @@ Deno.test('v2 docker.io / getManifest (unknown repo)', async () => {
         maxSchemaVersion: 2,
         name: 'unknownreponame',
     });
-    await assertThrowsAsync(async () => {
+    await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'latest'});
-    }, Error, 'Not Found');
+    }, 401);
 });
 
 Deno.test('v2 docker.io / getManifest (bad username/password)', async () => {
@@ -220,9 +220,9 @@ Deno.test('v2 docker.io / getManifest (bad username/password)', async () => {
         password: 'fredForgot',
         // log: log
     });
-    await assertThrowsAsync(async () => {
+    await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'latest'});
-    }, Error, ' 401 ');
+    }, 401);
 });
 
 Deno.test('v2 docker.io / headBlob', async () => {
@@ -254,11 +254,11 @@ Deno.test('v2 docker.io / headBlob', async () => {
 
 Deno.test('v2 docker.io / headBlob (unknown digest)', async () => {
     const client = createClient({ repo });
-    await assertThrowsAsync(async () => {
+    const {resp} = await assertThrowsHttp(async () => {
         await client.headBlob({digest: 'cafebabe'});
-    }, Error, ' 404 ');
-    // assertEquals(res.headers['docker-distribution-api-version'],
-    //     'registry/2.0');
+    }, 404);
+    assertEquals(resp.headers.get('docker-distribution-api-version'),
+        'registry/2.0');
 });
 
 Deno.test('v2 docker.io / createBlobReadStream', async () => {
@@ -300,9 +300,9 @@ Deno.test('v2 docker.io / createBlobReadStream', async () => {
 
 Deno.test('v2 docker.io / createBlobReadStream (unknown digest)', async () => {
     const client = createClient({ repo });
-    await assertThrowsAsync(async () => {
+    const {resp} = await assertThrowsHttp(async () => {
         await client.createBlobReadStream({digest: 'cafebabe'})
-    }, Error, ' 404 ');
-    // assertEquals(res.headers['docker-distribution-api-version'],
-    //     'registry/2.0');
+    }, 404);
+    assertEquals(resp.headers.get('docker-distribution-api-version'),
+        'registry/2.0');
 });

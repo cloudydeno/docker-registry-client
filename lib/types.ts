@@ -123,3 +123,19 @@ export type AuthInfo =
     token: string;
   }
 ;
+
+
+export interface DockerResponse extends Response {
+  dockerBody(): Promise<Uint8Array>;
+  dockerJson(): Promise<unknown>;
+  dockerStream(): ReadableStream<Uint8Array>;
+
+  dockerErrors(): Promise<Array<RegistryError>>;
+  dockerThrowable(baseMsg: string): Promise<Error>;
+}
+
+export interface RegistryError {
+  code?: string;
+  message: string;
+  detail?: string;
+};

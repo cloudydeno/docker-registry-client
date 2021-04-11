@@ -16,6 +16,8 @@ import {
 import {
     Manifest,
     RegistryIndex, RegistryImage,
+    RegistryClientOpts,
+    AuthInfo,
 } from "./types.ts";
 import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
@@ -30,24 +32,8 @@ import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
  * <https://docs.docker.com/registry/spec/api/>
  */
 
-// var assert = require('assert-plus');
-// var base64url = require('base64url');
-// var bunyan = require('bunyan');
-// var crypto = require('crypto');
-// var fmt = require('util').format;
 // var jwkToPem = require('jwk-to-pem');
 // var mod_jws = require('jws');
-// var querystring = require('querystring');
-// var restifyClients = require('restify-clients');
-// var restifyErrors = require('restify-errors');
-// var strsplit = require('strsplit');
-// var mod_url = require('url');
-// var vasync = require('vasync');
-
-// var common = require('./common');
-// var DockerJsonClient = require('./docker-json-client');
-// var errors = require('./errors');
-
 
 // --- Globals
 
@@ -61,32 +47,6 @@ export const MEDIATYPE_MANIFEST_LIST_V2
     = 'application/vnd.docker.distribution.manifest.list.v2+json';
 
 
-// --- internal support functions
-
-
-// function _createLogger(log) {
-//     assert.optionalObject(log, 'log');
-
-//     if (log) {
-//         // TODO avoid this .child if already have the serializers, e.g. for
-//         // recursive call.
-//         return log.child({
-//             serializers: restifyClients.bunyan.serializers
-//         });
-//     } else {
-//         return bunyan.createLogger({
-//             name: 'registry',
-//             serializers: restifyClients.bunyan.serializers
-//         });
-//     }
-// }
-
-
-function _basicAuthHeader(username: string, password: string) {
-    return 'Basic ' + btoa(username + ':' + password);
-}
-
-
 /*
  * Set the "Authorization" HTTP header into the headers object from the given
  * auth info.
@@ -95,21 +55,14 @@ function _basicAuthHeader(username: string, password: string) {
  * - Else, if the authorization key exists, then it is removed from headers.
  */
 function _setAuthHeaderFromAuthInfo(headers: Headers, authInfo: AuthInfo) {
-    if (authInfo.token) {
+    if (authInfo.type === 'Bearer') {
         headers.set('authorization', 'Bearer ' + authInfo.token);
-    } else if (authInfo.username || authInfo.password) {
-        headers.set('authorization', _basicAuthHeader(authInfo.username ?? '',
-            authInfo.password ?? ''));
+    } else if (authInfo.type === 'Basic') {
+        const credentials = `${authInfo.username ?? ''}:${authInfo.password ?? ''}`;
+        headers.set('authorization', 'Basic ' + btoa(credentials));
     } else {
         headers.delete('authorization');
     }
-}
-
-interface AuthInfo {
-    type?: string;
-    username?: string;
-    password?: string;
-    token?: string;
 }
 
 /**
@@ -316,8 +269,9 @@ async function _getToken(opts: {
     if (opts.username) {
         query.set('account', opts.username);
         _setAuthHeaderFromAuthInfo(headers, {
+            type: 'Basic',
             username: opts.username,
-            password: opts.password
+            password: opts.password ?? '',
         });
     }
     if (query.toString()) {
@@ -843,7 +797,10 @@ export async function login(opts: {
     // rejectUnauthorized?: boolean;
     userAgent?: string;
     // agent
-}) {
+}): Promise<{
+    status: string;
+    authInfo: AuthInfo;
+}> {
     let index = opts.index || opts.indexName;
     if (typeof (index) === 'string') {
         index = parseIndex(index);
@@ -864,7 +821,9 @@ export async function login(opts: {
             // No authorization is necessary.
             return {
                 status: "No authorization is necessary.",
-                authInfo: {},
+                authInfo: {
+                    type: 'None',
+                },
             };
         } else if (res.status === 401) {
             chalHeader = res.headers.get('www-authenticate');
@@ -887,9 +846,9 @@ export async function login(opts: {
 
     if (authChallenge.scheme.toLowerCase() === 'basic') {
         authInfo = {
-            type: 'basic',
-            username: opts.username,
-            password: opts.password
+            type: 'Basic',
+            username: opts.username ?? '',
+            password: opts.password ?? ''
         };
 
     } else if (authChallenge.scheme.toLowerCase() === 'bearer') {
@@ -897,7 +856,7 @@ export async function login(opts: {
             //     'login: get Bearer auth token');
 
         authInfo = {
-            type: 'bearer',
+            type: 'Bearer',
             token: await _getToken({
                 indexName: index.name,
                 realm: authChallenge.parms.realm,
@@ -960,23 +919,6 @@ export async function login(opts: {
 // }
 
 
-interface RegistryClientV2Opts {
-    name?: string; // mutually exclusive with repo
-    repo?: RegistryImage;
-    // log
-    username?: string;
-    password?: string;
-    token?: string; // for bearer auth
-    insecure?: boolean;
-    scheme?: string;
-    acceptManifestLists?: boolean;
-    maxSchemaVersion?: number;
-    userAgent?: string;
-    scopes?: string[];
-};
-
-
-// --- RegistryClientV2
 export class RegistryClientV2 {
     insecure: boolean;
     repo: RegistryImage;
@@ -990,7 +932,6 @@ export class RegistryClientV2 {
     private _authInfo?: AuthInfo | null;
     private _headers: Headers;
     private _url: string;
-    // private _clientsToClose: never[];
     private _commonHttpClientOpts: {
         userAgent: string;
     }
@@ -1003,7 +944,7 @@ export class RegistryClientV2 {
      * ... TODO: lots more to document
      *
      */
-    constructor(opts: RegistryClientV2Opts) {
+    constructor(opts: RegistryClientOpts) {
         this.insecure = Boolean(opts.insecure);
         if (opts.repo) {
             this.repo = deepObjCopy(opts.repo);
@@ -1032,14 +973,22 @@ export class RegistryClientV2 {
         this._authInfo = null;
         this._headers = new Headers();
 
-        _setAuthHeaderFromAuthInfo(this._headers, {
-            token: opts.token,
-            username: opts.username,
-            password: opts.password
-        });
-
-        // XXX relevant for v2?
-        //this._cookieJar = new tough.CookieJar();
+        if (opts.token) {
+            _setAuthHeaderFromAuthInfo(this._headers, {
+                type: 'Bearer',
+                token: opts.token,
+            });
+        } else if (opts.username || opts.password) {
+            _setAuthHeaderFromAuthInfo(this._headers, {
+                type: 'Basic',
+                username: opts.username ?? '',
+                password: opts.password ?? '',
+            });
+        } else {
+            _setAuthHeaderFromAuthInfo(this._headers, {
+                type: 'None',
+            });
+        }
 
         if (this.repo.index.official) {  // v1
             this._url = DEFAULT_V2_REGISTRY;
@@ -1282,27 +1231,24 @@ export class RegistryClientV2 {
         }
 
         // Verify the manifest contents.
-        if (manifest.mediaType === MEDIATYPE_MANIFEST_LIST_V2) {
-            if (!Array.isArray(manifest.manifests) ||
-                    manifest.manifests.length === 0) {
+        var layers: Array<unknown> | undefined;
+        if (manifest.schemaVersion === 1) {
+            layers = manifest.fsLayers;
+            if (layers!.length !== manifest.history!.length) {
                 throw new Error(
-                    `no manifests in ${this.repo.localName}:${opts.ref} manifest list`);
+                    'history length not equal to layers length in '
+                    + `${this.repo.localName}:${opts.ref} manifest`);
             }
-        } else {
-            var layers: Array<unknown> | undefined = manifest.fsLayers;
-            if (manifest.schemaVersion === 1) {
-                if (layers!.length !== manifest.history!.length) {
-                    throw new Error(
-                        'history length not equal to layers length in '
-                        + `${this.repo.localName}:${opts.ref} manifest`);
-                }
-            } else if (manifest.schemaVersion === 2) {
+        } else if (manifest.schemaVersion === 2) {
+            if (manifest.mediaType === MEDIATYPE_MANIFEST_LIST_V2) {
+                layers = manifest.manifests;
+            } else {
                 layers = manifest.layers;
             }
-            if (!layers || layers.length === 0) {
-                throw new Error(
-                    `no layers in ${this.repo.localName}:${opts.ref} manifest`);
-            }
+        }
+        if (!layers || layers.length === 0) {
+            throw new Error(
+                `no layers or manifests in ${this.repo.localName}:${opts.ref} manifest`);
         }
 
         // TODO: `verifyTrustedKeys` from
@@ -1388,30 +1334,6 @@ export class RegistryClientV2 {
         throw new Error(`maximum number of redirects (${maxRedirects}) hit`);
     };
 
-// /**
-//  * Makes a http request to the given url, following any redirects, then parses
-//  * the (JSON) response and fires the callback(err, req, res, obj, body) with
-//  * the result. Note that 'obj' is the parsed JSON response object, 'body' is
-//  * the raw response body string.
-//  */
-// _makeJsonRequest(opts, cb) {
-//     var this = this;
-//     assert.object(opts, 'opts');
-//     assert.func(cb, 'cb');
-
-//     this._makeHttpRequest(opts, function (err, req, responses) {
-//         var res = responses ? responses[responses.length - 1] : null;
-//         if (err) {
-//             cb(err, req, res);
-//             return;
-//         }
-//         // Parse the response body using the JSON client parser.
-//         var parseFn = DockerJsonClient.prototype.parse.call(this._api, req, cb);
-//         parseFn(err, res);
-//         // Release the bulls!
-//         res.resume();
-//     });
-// };
 
     async _headOrGetBlob(opts: {
         method: string;
@@ -1427,63 +1349,63 @@ export class RegistryClientV2 {
     };
 
 
-/*
- * Get an image file blob -- just the headers. See `getBlob`.
- *
- * <https://docs.docker.com/registry/spec/api/#get-blob>
- * <https://docs.docker.com/registry/spec/api/#pulling-an-image-manifest>
- *
- * This endpoint can return 3xx redirects. An example first hit to Docker Hub
- * yields this response
- *
- *      HTTP/1.1 307 Temporary Redirect
- *      docker-content-digest: sha256:b15fbeba7181d178e366a5d8e0...
- *      docker-distribution-api-version: registry/2.0
- *      location: https://dseasb33srnrn.cloudfront.net/registry-v2/...
- *      date: Mon, 01 Jun 2015 23:43:55 GMT
- *      content-type: text/plain; charset=utf-8
- *      connection: close
- *      strict-transport-security: max-age=3153600
- *
- * And after resolving redirects, this:
- *
- *      HTTP/1.1 200 OK
- *      Content-Type: application/octet-stream
- *      Content-Length: 2471839
- *      Connection: keep-alive
- *      Date: Mon, 01 Jun 2015 20:23:43 GMT
- *      Last-Modified: Thu, 28 May 2015 23:02:16 GMT
- *      ETag: "f01c599df7404875a0c1740266e74510"
- *      Accept-Ranges: bytes
- *      Server: AmazonS3
- *      Age: 11645
- *      X-Cache: Hit from cloudfront
- *      Via: 1.1 e3799a12d0e2fdaad3586ff902aa529f.cloudfront.net (CloudFront)
- *      X-Amz-Cf-Id: 8EUekYdb8qGK48Xm0kmiYi1GaLFHbcv5L8fZPOUWWuB5zQfr72Qdfg==
- *
- * A client will typically want to follow redirects, so by default we
- * follow redirects and return a responses. If needed a `opts.noFollow=true`
- * could be implemented.
- *
- *      cb(err, ress)   // `ress` is the plural of `res` for "response"
- *
- * Interesting headers:
- * - `ress[0].headers['docker-content-digest']` is the digest of the
- *   content to be downloaded
- * - `ress[-1].headers['content-length']` is the number of bytes to download
- * - `ress[-1].headers[*]` as appropriate for HTTP caching, range gets, etc.
- */
-async headBlob(opts: {
-    digest: string;
-}) {
-    const resp = await this._headOrGetBlob({
-        method: 'HEAD',
-        digest: opts.digest
-    });
-    // consume the final body - since HEADs don't have meaningful bodies
-    await resp.slice(-1)[0].arrayBuffer();
-    return resp;
-};
+    /*
+    * Get an image file blob -- just the headers. See `getBlob`.
+    *
+    * <https://docs.docker.com/registry/spec/api/#get-blob>
+    * <https://docs.docker.com/registry/spec/api/#pulling-an-image-manifest>
+    *
+    * This endpoint can return 3xx redirects. An example first hit to Docker Hub
+    * yields this response
+    *
+    *      HTTP/1.1 307 Temporary Redirect
+    *      docker-content-digest: sha256:b15fbeba7181d178e366a5d8e0...
+    *      docker-distribution-api-version: registry/2.0
+    *      location: https://dseasb33srnrn.cloudfront.net/registry-v2/...
+    *      date: Mon, 01 Jun 2015 23:43:55 GMT
+    *      content-type: text/plain; charset=utf-8
+    *      connection: close
+    *      strict-transport-security: max-age=3153600
+    *
+    * And after resolving redirects, this:
+    *
+    *      HTTP/1.1 200 OK
+    *      Content-Type: application/octet-stream
+    *      Content-Length: 2471839
+    *      Connection: keep-alive
+    *      Date: Mon, 01 Jun 2015 20:23:43 GMT
+    *      Last-Modified: Thu, 28 May 2015 23:02:16 GMT
+    *      ETag: "f01c599df7404875a0c1740266e74510"
+    *      Accept-Ranges: bytes
+    *      Server: AmazonS3
+    *      Age: 11645
+    *      X-Cache: Hit from cloudfront
+    *      Via: 1.1 e3799a12d0e2fdaad3586ff902aa529f.cloudfront.net (CloudFront)
+    *      X-Amz-Cf-Id: 8EUekYdb8qGK48Xm0kmiYi1GaLFHbcv5L8fZPOUWWuB5zQfr72Qdfg==
+    *
+    * A client will typically want to follow redirects, so by default we
+    * follow redirects and return a responses. If needed a `opts.noFollow=true`
+    * could be implemented.
+    *
+    *      cb(err, ress)   // `ress` is the plural of `res` for "response"
+    *
+    * Interesting headers:
+    * - `ress[0].headers['docker-content-digest']` is the digest of the
+    *   content to be downloaded
+    * - `ress[-1].headers['content-length']` is the number of bytes to download
+    * - `ress[-1].headers[*]` as appropriate for HTTP caching, range gets, etc.
+    */
+    async headBlob(opts: {
+        digest: string;
+    }) {
+        const resp = await this._headOrGetBlob({
+            method: 'HEAD',
+            digest: opts.digest
+        });
+        // consume the final body - since HEADs don't have meaningful bodies
+        await resp.slice(-1)[0].arrayBuffer();
+        return resp;
+    };
 
 
 // /**
@@ -1866,6 +1788,6 @@ async headBlob(opts: {
 
 }
 
-export function createClient(opts: RegistryClientV2Opts) {
+export function createClient(opts: RegistryClientOpts) {
     return new RegistryClientV2(opts);
 }

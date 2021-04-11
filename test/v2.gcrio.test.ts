@@ -9,9 +9,10 @@
  */
 
 import { assertEquals, assert, assertThrowsAsync } from "https://deno.land/std@0.92.0/testing/asserts.ts";
-import { createClient } from "../lib/registry-client-v2.ts";
+import { createClient, MEDIATYPE_MANIFEST_LIST_V2 } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
-import { Manifest } from "../lib/types.ts";
+import { ManifestV2 } from "../lib/types.ts";
+import { Sha256 } from "https://deno.land/std@0.92.0/hash/sha256.ts";
 
 // --- globals
 
@@ -79,16 +80,18 @@ Deno.test('v2 gcr.io / listTags', async () => {
     *   ]
     * }
     */
-let _manifest: Manifest | null;
+let _manifest: ManifestV2 | null;
 let _manifestDigest: string | null;
 Deno.test('v2 gcr.io / getManifest', async () => {
     const client = createClient(clientOpts);
     const {manifest, resp} = await client.getManifest({ref: TAG});
-    _manifest = manifest ?? null;
     _manifestDigest = resp.headers.get('docker-content-digest');
     assert(manifest);
     assert(_manifestDigest, 'check for manifest digest header');
     assertEquals(manifest.schemaVersion, 2);
+    assert(manifest.schemaVersion === 2);
+    assert(manifest.mediaType !== MEDIATYPE_MANIFEST_LIST_V2);
+    _manifest = manifest ?? null;
     assert(manifest.config);
     assert(manifest.config.digest, manifest.config.digest);
     assert(manifest.layers);
@@ -102,9 +105,10 @@ Deno.test('v2 gcr.io / getManifest (by digest)', async () => {
     const {manifest} = await client.getManifest({ref: _manifestDigest});
     assert(manifest);
     assertEquals(_manifest!.schemaVersion, manifest.schemaVersion);
-    assertEquals(_manifest!.name, manifest.name);
-    assertEquals(_manifest!.tag, manifest.tag);
-    assertEquals(_manifest!.architecture, manifest.architecture);
+    assert(manifest.schemaVersion === 2);
+    assert(manifest.mediaType !== MEDIATYPE_MANIFEST_LIST_V2);
+    assertEquals(_manifest!.config, manifest.config);
+    assertEquals(_manifest!.layers, manifest.layers);
 });
 
 Deno.test('v2 gcr.io / getManifest (unknown tag)', async () => {
@@ -186,10 +190,9 @@ Deno.test('v2 gcr.io / headBlob (unknown digest)', async () => {
     }, Error, ' 400 '); // seems to be the latest code for this
 
     // - docker.io gives 404, which is what I'd expect
-    // - gcr.io gives 405 (Method Not Allowed). Hrm.
+    // - gcr.io gives 400? Hrm.
     // The spec doesn't specify:
     // https://docs.docker.com/registry/spec/api/#existing-layers
-    // assertEquals(res.status, 404);
 
     // Docker-Distribution-Api-Version header:
     // docker.io includes this header here, gcr.io does not.
@@ -198,79 +201,59 @@ Deno.test('v2 gcr.io / headBlob (unknown digest)', async () => {
 
 });
 
-// Deno.test('v2 gcr.io / createBlobReadStream', async () => {
-//     var digest = manifest.layers[0].digest;
-//     client.createBlobReadStream({digest: digest},
-//             function (err, stream, ress) {
+Deno.test('v2 gcr.io / createBlobReadStream', async () => {
+    if (!_manifestDigest || !_manifest) throw new Error('cannot test');
+    const client = createClient({ repo });
+    const digest = _manifest.layers[0].digest;
+    const {ress, stream} = await client.createBlobReadStream({digest: digest});
+    assert(ress, 'got responses');
+    assert(Array.isArray(ress), 'ress is an array');
 
-//         assert(ress);
-//         assert(Array.isArray(ress));
-//         var first = ress[0];
-//         // First request statusCode on a redirect:
-//         // - gcr.io gives 302 (Found)
-//         // - docker.io gives 307
-//         assert([200, 302, 307].indexOf(first.status) !== -1,
-//             'first request status code 200, 302 or 307: statusCode=' +
-//             first.status);
+    const first = ress[0];
+    assert(first.status === 200 || first.status === 307 || first.status === 302,
+        `createBlobReadStream first res statusCode is 200 or 307, was ${first.status}`);
+    if (first.headers.get('docker-content-digest')) {
+        assertEquals(first.headers.get('docker-content-digest'), digest,
+            '"docker-content-digest" header from first response is '
+            + 'the queried digest');
+    }
+    assertEquals(first.headers.get('docker-distribution-api-version'),
+        'registry/2.0',
+        '"docker-distribution-api-version" header is "registry/2.0"');
 
-//         // No digest head is returned (it's using an earlier version of the
-//         // registry API).
-//         if (first.headers['docker-content-digest']) {
-//             assertEquals(first.headers['docker-content-digest'], digest);
-//         }
+    const last = ress.slice(-1)[0];
+    assert(last, 'got a stream');
+    assertEquals(last.status, 200);
+    // Content-Type:
+    // - docker.io gives 'application/octet-stream', which is what
+    //   I'd expect for the GET response at least.
+    // - However gcr.io, at least for the iamge being tested, now
+    //   returns text/html.
+    assertEquals(last.headers.get('content-type'), 'text/html');
+    assert(last.headers.get('content-length') !== undefined, 'got a "content-length" header');
 
-//         assertEquals(first.headers['docker-distribution-api-version'],
-//             'registry/2.0');
+    var numBytes = 0;
+    const hash = new Sha256();
+    for await (const chunk of stream) {
+        hash.update(chunk);
+        numBytes += chunk.length;
+    }
+    assertEquals(hash.hex(), digest.split(':')[1]);
+    assertEquals(numBytes, Number(last.headers.get('content-length')));
+});
 
-//         assert(stream);
-//         assertEquals(stream.status, 200);
-//         // Content-Type:
-//         // - docker.io gives 'application/octet-stream', which is what
-//         //   I'd expect for the GET response at least.
-//         // - However gcr.io, at least for the iamge being tested, now
-//         //   returns text/html.
-//         assertEquals(stream.headers['content-type'],
-//             'text/html',
-//             format('expect specific Content-Type on stream response; '
-//                 + 'statusCode=%s headers=%j',
-//                 stream.status, stream.headers));
-//         assert(stream.headers['content-length']);
+Deno.test('v2 gcr.io / createBlobReadStream (unknown digest)', async () => {
+    const client = createClient({ repo });
+    await assertThrowsAsync(async () => {
+        await client.createBlobReadStream({digest: 'cafebabe'})
+    }, Error, ' 400 ');
+    // - docker.io gives 404, which is what I'd expect
+    // - gcr.io gives 400? Hrm.
+    // The spec doesn't specify:
+    // https://docs.docker.com/registry/spec/api/#existing-layers
 
-//         var numBytes = 0;
-//         var hash = crypto.createHash(digest.split(':')[0]);
-//         stream.on('data', function (chunk) {
-//             hash.update(chunk);
-//             numBytes += chunk.length;
-//         });
-//         stream.on('end', function () {
-//             assertEquals(hash.digest('hex'), digest.split(':')[1]);
-//             assertEquals(numBytes, Number(stream.headers['content-length']));
-//             t.end();
-//         });
-//         stream.resume();
-//     });
-// });
-
-// Deno.test('v2 gcr.io / createBlobReadStream (unknown digest)', async () => {{
-//     client.createBlobReadStream({digest: 'cafebabe'},
-//             function (err, stream, ress) {
-//         assert(err);
-//         assert(ress);
-//         assert(Array.isArray(ress));
-//         assertEquals(ress.length, 1);
-//         // var res = ress[0];
-
-//         // statusCode:
-//         // - docker.io gives 404, which is what I'd expect
-//         // - gcr.io gives 405 (Method Not Allowed). Hrm.
-//         // The spec doesn't specify:
-//         // https://docs.docker.com/registry/spec/api/#existing-layers
-//         // assertEquals(res.status, 404);
-
-//         // Docker-Distribution-Api-Version header:
-//         // docker.io includes this header here, gcr.io does not.
-//         // assertEquals(res.headers['docker-distribution-api-version'],
-//         //    'registry/2.0');
-
-//     });
-// });
+    // Docker-Distribution-Api-Version header:
+    // docker.io includes this header here, gcr.io does not.
+    // assertEquals(res.headers['docker-distribution-api-version'],
+    //    'registry/2.0');
+});

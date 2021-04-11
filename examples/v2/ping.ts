@@ -11,7 +11,7 @@
  */
 
 import { mainline } from "../mainline.ts";
-import { ping } from "../../lib/registry-client-v2.ts";
+import { createClient } from "../../lib/registry-client-v2.ts";
 
 // Shared mainline with examples/foo.js to get CLI opts.
 const {opts, args} = mainline({cmd: 'ping'});
@@ -24,13 +24,13 @@ if (opts.help) {
 var indexName = args[0] || 'https://index.docker.io/v1/';
 
 // The interesting stuff starts here.
-const res = await ping({
-    indexName: indexName,
-    // log: log,
+const client = createClient({
+    name: indexName,
     // username: opts.username,
     // password: opts.password,
-    insecure: opts.insecure
+    insecure: opts.insecure,
 });
+const res = await client.ping();
 console.log('HTTP status: %s', res.status);
 console.log('Headers:');
 console.table(Array.from(res.headers));

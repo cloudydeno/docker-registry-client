@@ -12,7 +12,7 @@ import { RegistryImage } from "./types.ts";
 import * as reg2 from './registry-client-v2.ts';
 
 export * from './types.ts';
-export { RegistryClientV2, login, ping } from './registry-client-v2.ts';
+export { RegistryClientV2 } from './registry-client-v2.ts';
 
 // --- exported functions
 

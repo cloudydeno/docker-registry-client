@@ -8,16 +8,17 @@ import { Sha256 } from "https://deno.land/std@0.92.0/hash/sha256.ts";
 
 import {
     parseIndex, parseRepo,
-    deepObjCopy,
     isLocalhost,
     urlFromIndex,
     DEFAULT_USERAGENT,
+splitIntoTwo,
 } from "./common.ts";
 import {
     Manifest,
     RegistryIndex, RegistryImage,
     RegistryClientOpts,
     AuthInfo,
+TagList,
 } from "./types.ts";
 import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
@@ -38,8 +39,8 @@ import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
 // --- Globals
 
 // https://github.com/docker/docker/blob/77da5d8/registry/config_unix.go#L10
-var DEFAULT_V2_REGISTRY = 'https://registry-1.docker.io';
-var MAX_REGISTRY_ERROR_LENGTH = 10000;
+const DEFAULT_V2_REGISTRY = 'https://registry-1.docker.io';
+const MAX_REGISTRY_ERROR_LENGTH = 10000;
 
 export const MEDIATYPE_MANIFEST_V2
     = 'application/vnd.docker.distribution.manifest.v2+json';
@@ -220,92 +221,6 @@ function _parseWWWAuthenticate(header: string) {
             + '": ' + parsed.err);
     }
     return parsed;
-}
-
-
-/**
- * Get an auth token.
- *
- * See: docker/docker.git:registry/token.go
- */
-async function _getToken(opts: {
-    indexName: string;
-    realm: string;
-    service?: string;
-    scopes?: string[];
-    username?: string;
-    password?: string;
-    // assert.object(opts.log, 'opts.log');
-    // assert.optionalObject(opts.agent, 'opts.agent');
-    // // assert.optional object or bool(opts.proxy, 'opts.proxy');
-    insecure?: boolean;
-    userAgent?: string;
-}): Promise<string> {
-    // - add https:// prefix (or http) if none on 'realm'
-    var tokenUrl = opts.realm;
-    var match = /^(\w+):\/\//.exec(tokenUrl);
-    if (!match) {
-        tokenUrl = (opts.insecure ? 'http' : 'https') + '://' + tokenUrl;
-    } else if (['http', 'https'].indexOf(match[1]) === -1) {
-        throw new Error('unsupported scheme for ' +
-            `WWW-Authenticate realm "${opts.realm}": "${match[1]}"`);
-    }
-
-    // - GET $realm
-    //      ?service=$service
-    //      (&scope=$scope)*
-    //      (&account=$username)
-    //   Authorization: Basic ...
-    var headers = new Headers;
-    var query = new URLSearchParams;
-    if (opts.service) {
-        query.set('service', opts.service);
-    }
-    if (opts.scopes && opts.scopes.length) {
-        for (const scope of opts.scopes) {
-            query.append('scope', scope);  // intentionally singular 'scope'
-        }
-    }
-    if (opts.username) {
-        query.set('account', opts.username);
-        _setAuthHeaderFromAuthInfo(headers, {
-            type: 'Basic',
-            username: opts.username,
-            password: opts.password ?? '',
-        });
-    }
-    if (query.toString()) {
-        tokenUrl += '?' + query.toString();
-    }
-    // log.trace({tokenUrl: tokenUrl}, '_getToken: url');
-
-    var parsedUrl = new URL(tokenUrl);
-    var client = new DockerJsonClient({
-        url: parsedUrl.origin,
-        // log: log,
-        // agent: opts.agent,
-        // proxy: opts.proxy,
-        rejectUnauthorized: !opts.insecure,
-        userAgent: opts.userAgent || DEFAULT_USERAGENT
-    });
-    const resp = await client.get({
-        path: parsedUrl.href.slice(parsedUrl.origin.length),
-        headers: headers,
-        expectStatus: [200, 401],
-    });
-    if (resp.status === 401) {
-        // Convert *all* 401 errors to use a generic error constructor
-        // with a simple error message.
-        var errMsg = _getRegistryErrorMessage(await resp.dockerJson());
-        throw new Error('Registry 401 - Auth failed: '+errMsg);
-    }
-    const body = await resp.json();
-    if (typeof body.token !== 'string') {
-        console.log('auth resp:', body);
-        throw new Error('authorization ' +
-            'server did not include a token in the response');
-    }
-    return body.token;
 }
 
 
@@ -528,61 +443,67 @@ async function _getToken(opts: {
 // }
 
 
-// /*
-//  * Parse the 'Docker-Content-Digest' header.
-//  *
-//  * @throws {BadDigestError} if the value is missing or malformed
-//  * @returns ...
-//  */
-// function _parseDockerContentDigest(dcd) {
-//     if (!dcd) {
-//         throw new restifyErrors.BadDigestError(
-//             'missing "Docker-Content-Digest" header');
-//     }
+/*
+ * Parse the 'Docker-Content-Digest' header.
+ *
+ * @throws {BadDigestError} if the value is missing or malformed
+ */
+function _parseDockerContentDigest(dcd: string) {
+    if (!dcd) throw new Error(
+        'missing "Docker-Content-Digest" header');
+    const errPre = `could not parse Docker-Content-Digest header "${dcd}": `;
 
-//     // E.g. docker-content-digest: sha256:887f7ecfd0bda3...
-//     var parts = strsplit(dcd, ':', 2);
-//     if (parts.length !== 2) {
-//         throw new restifyErrors.BadDigestError(
-//             'could not parse "Docker-Content-Digest" header: ' + dcd);
-//     }
+    // E.g. docker-content-digest: sha256:887f7ecfd0bda3...
+    var parts = splitIntoTwo(dcd, ':');
+    if (parts.length !== 2) throw new Error(
+        errPre + JSON.stringify(dcd));
+    if (parts[0] !== 'sha256') throw new Error(
+        errPre + 'Unsupported hash algorithm ' + JSON.stringify(parts[0]));
 
-//     var hash;
-//     try {
-//         hash = crypto.createHash(parts[0]);
-//     } catch (hashErr) {
-//         throw new restifyErrors.BadDigestError(hashErr, fmt(
-//             '"Docker-Content-Digest" header error: %s: %s',
-//             hashErr.message, dcd));
-//     }
-//     var expectedDigest = parts[1];
+    return {
+        raw: dcd,
+        algorithm: parts[0],
+        expectedDigest: parts[1],
+        startHash() { switch (this.algorithm) {
+            case 'sha256': return new Sha256();
+            default: throw new Error(`Unsupported hash algorithm ${this.algorithm}`);
+        } },
+        get validationStream() {
+            const hash = this.startHash();
+            return new TransformStream<Uint8Array,Uint8Array>({
+                transform: (chunk, controller) => {
+                    hash.update(chunk);
+                    controller.enqueue(chunk);
+                },
+                flush: (controller) => {
+                    const digest = hash.hex();
+                    if (this.expectedDigest === digest) return;
+                    controller.error(new Error(`BadDigestError: Docker-Content-Digest (${this.expectedDigest} vs ${digest})`));
+                },
+            })
+        }
+    };
+}
 
-//     return {
-//         raw: dcd,
-//         hash: hash,
-//         algorithm: parts[0],
-//         expectedDigest: expectedDigest
-//     };
-// }
+/*
+ * Verify the 'Docker-Content-Digest' header for a getManifest response.
+ *
+ * @throws {BadDigestError} if the digest doesn't check out.
+ */
+function _verifyManifestDockerContentDigest(res: Response, jws: {payload: string}) {
+    var dcdInfo = _parseDockerContentDigest(
+        res.headers.get('docker-content-digest') ?? '');
 
-// /*
-//  * Verify the 'Docker-Content-Digest' header for a getManifest response.
-//  *
-//  * @throws {BadDigestError} if the digest doesn't check out.
-//  */
-// function _verifyManifestDockerContentDigest(res, jws) {
-//     var dcdInfo = _parseDockerContentDigest(
-//         res.headers['docker-content-digest']);
-
-//     dcdInfo.hash.update(jws.payload);
-//     var digest = dcdInfo.hash.digest('hex');
-//     if (dcdInfo.expectedDigest !== digest) {
-//         res.log.trace({expectedDigest: dcdInfo.expectedDigest,
-//             header: dcdInfo.raw, digest: digest},
-//             'Docker-Content-Digest failure');
-//         throw new restifyErrors.BadDigestError('Docker-Content-Digest');
-//     }
-// }
+    const hash = dcdInfo.startHash();
+    hash.update(jws.payload);
+    var digest = hash.hex();
+    if (dcdInfo.expectedDigest !== digest) {
+        // res.log.trace({expectedDigest: dcdInfo.expectedDigest,
+        //     header: dcdInfo.raw, digest: digest},
+        //     'Docker-Content-Digest failure');
+        throw new Error(`BadDigestError: Docker-Content-Digest (${dcdInfo.expectedDigest} vs ${digest})`);
+    }
+}
 
 
 // /*
@@ -640,250 +561,6 @@ async function _getToken(opts: {
 // }
 
 
-// --- other exports
-
-/**
- * Ping the base URL.
- * See: <https://docs.docker.com/registry/spec/api/#base>
- *
- * @param opts {Object} Required members are listed first.
- *      - opts.index {String|Object} Required. One of an index *name* (e.g.
- *        "docker.io", "quay.io") that `parseIndex` will handle, an index
- *        *url* (e.g. the default from `docker login` is
- *        'https://index.docker.io/v1/'), or an index *object* as returned by
- *        `parseIndex`. For backward compatibility, `opts.indexName` may be
- *        used instead of `opts.index`.
- *      --
- *      - opts.log {Bunyan Logger} Optional.
- *      --
- *      TODO: document other options
- * @param cb {Function} `function (err, body, res, req)`
- *      `err` is set if there was a problem getting a ping response. `res` is
- *      the response object. Use `res.statusCode` to infer information:
- *          404     This registry URL does not support the v2 API.
- *          401     Authentication is required (or failed). Use the
- *                  WWW-Authenticate header for the appropriate auth method.
- *                  This `res` can be passed to `login()` to handle
- *                  authenticating.
- *          200     Successful authentication. The response body is `body`
- *                  if wanted.
- */
-export async function ping(opts: {
-    index?: string | RegistryIndex;
-    indexName?: string;
-    // log
-    insecure?: boolean;
-    // rejectUnauthorized?: boolean;
-    userAgent?: string;
-    // agent
-}) {
-    var index = opts.index || opts.indexName;
-    if (typeof (index) === 'string') {
-        index = parseIndex(index);
-    } else if (!index) throw new Error(`index is required`);
-
-    // var log = _createLogger(opts.log);
-    // log.trace({index: index, scope: opts.scope, insecure: opts.insecure},
-    //     'ping');
-
-    /*
-     * We have to special case usage of the "official" docker.io to
-     *      https://registry-1.docker.io
-     * because:
-     *      GET /v2/ HTTP/1.1
-     *      Host: index.docker.io
-     *
-     *      HTTP/1.1 301 Moved Permanently
-     *      location: https://registry.hub.docker.com/v2/
-     * and:
-     *      $ curl -i https://registry.hub.docker.com/v2/
-     *      HTTP/1.1 404 NOT FOUND
-     */
-    var registryUrl;
-    if (index.official) {
-        registryUrl = DEFAULT_V2_REGISTRY;
-    } else {
-        registryUrl = urlFromIndex(index);
-    }
-
-    /*
-     * We allow either opts.rejectUnauthorized (for passed in http client
-     * options where `insecure` -> `rejectUnauthorized` translation has
-     * already been done) or opts.insecure (this module's chosen name
-     * for this thing).
-     */
-    // var rejectUnauthorized;
-    // if (opts.insecure !== undefined && opts.rejectUnauthorized !== undefined) {
-    //     throw new Error(
-    //         'cannot set both opts.insecure and opts.rejectUnauthorized');
-    // } else if (opts.insecure !== undefined) {
-    //     rejectUnauthorized = !opts.insecure;
-    // } else if (opts.rejectUnauthorized !== undefined) {
-    //     rejectUnauthorized = opts.rejectUnauthorized;
-    // }
-
-    var client = new DockerJsonClient({
-        url: registryUrl,
-        // log: opts.log,
-        userAgent: opts.userAgent || DEFAULT_USERAGENT,
-        // rejectUnauthorized: rejectUnauthorized,
-        // agent: opts.agent,
-        // proxy: opts.proxy
-    });
-
-    const resp = await client.get({
-        path: '/v2/',
-        expectStatus: [200, 401, 404],
-        // Ping should be fast. We don't want 15s of retrying.
-        retry: false,
-        connectTimeout: 10000,
-    });
-    await resp.dockerBody();
-    return resp;
-}
-
-
-/**
- * Login V2
- *
- * Typically one does not need to call this function directly because most
- * methods of a `RegistryClientV2` will automatically login as necessary.
- * Once exception is the `ping` method, which intentionally does not login.
- * That is because the point of the ping is to determine quickly if the
- * registry supports v2, which doesn't require the extra work of logging in.
- *
- * This attempts to reproduce the logic of "docker.git:registry/auth.go#loginV2"
- *
- * @param opts {Object}
- *      - opts.index {String|Object} Required. One of an index *name* (e.g.
- *        "docker.io", "quay.io") that `parseIndex` will handle, an index
- *        *url* (e.g. the default from `docker login` is
- *        'https://index.docker.io/v1/'), or an index *object* as returned by
- *        `parseIndex`. For backward compatibility, `opts.indexName` may be
- *        used instead of `opts.index`.
- *      - opts.username {String} Optional. Username and password are optional
- *        to allow `RegistryClientV2` to use `login` in the common case when
- *        there may or may not be auth required.
- *      - opts.password {String} Optional, but required if `opts.username` is
- *        provided.
- *      - opts.scope {String} Optional. A scope string passed in for
- *        bearer/token auth. If this is just a login request where the token
- *        won't be used, then the empty string (the default) is sufficient.
- *        // JSSTYLED
- *        See <https://github.com/docker/distribution/blob/master/docs/spec/auth/token.md#requesting-a-token>
- *      - opts.pingRes {Object} Optional. The response object from an earlier
- *        `ping()` call. This can be used to save re-pinging.
- *      - opts.pingErr {Object} Required if `pingRes` given. The error
- *        object for `pingRes`.
- *      ...
- * @param cb {Function} `function (err, result)`
- *      On success, `result` is an object with:
- *          status      a string description of the login result status
- *          authInfo    an object with authentication info, examples:
- *                          {type: 'basic', username: '...', password: '...'}
- *                          {type: 'bearer', token: '...'}
- *                      which can be the empty object when no auth is needed:
- *                          {}
- */
-export async function login(opts: {
-    index?: string | RegistryIndex;
-    indexName?: string;
-    username?: string;
-    password?: string;
-    scope?: string;
-    pingRes?: Response;
-    // log
-    insecure?: boolean;
-    // rejectUnauthorized?: boolean;
-    userAgent?: string;
-    // agent
-}): Promise<{
-    status: string;
-    authInfo: AuthInfo;
-}> {
-    let index = opts.index || opts.indexName;
-    if (typeof (index) === 'string') {
-        index = parseIndex(index);
-    } else if (!index) throw new Error(`index is required`);
-
-    // let log = _createLogger(opts.log);
-    // log.trace({index: index, username: opts.username,
-    //     password: (opts.password ? '(censored)' : '(none)'),
-    //     scope: opts.scope, insecure: opts.insecure}, 'login');
-
-    let scope = opts.scope || '';
-    let authInfo: AuthInfo;
-
-    let chalHeader = opts.pingRes?.headers.get('www-authenticate');
-    if (!chalHeader) {
-        const res = await ping(opts);
-        if (res.status === 200) {
-            // No authorization is necessary.
-            return {
-                status: "No authorization is necessary.",
-                authInfo: {
-                    type: 'None',
-                },
-            };
-        } else if (res.status === 401) {
-            chalHeader = res.headers.get('www-authenticate');
-
-            // // DOCKER-627 hack for quay.io
-            // if (!chalHeader && index.name === 'quay.io') {
-            //     /* JSSTYLED */
-            //     chalHeader = 'Bearer realm="https://quay.io/v2/auth",service="quay.io"';
-            // }
-
-        } else throw new Error(`HTTP ${res.status} from ping endpoint`);
-    };
-    if (!chalHeader) throw new Error(
-        'missing WWW-Authenticate header in 401 ' +
-        'response to "GET /v2/" (see ' +
-        /* JSSTYLED */
-        'https://docs.docker.com/registry/spec/api/#api-version-check)');
-
-    const authChallenge = _parseWWWAuthenticate(chalHeader);
-
-    if (authChallenge.scheme.toLowerCase() === 'basic') {
-        authInfo = {
-            type: 'Basic',
-            username: opts.username ?? '',
-            password: opts.password ?? ''
-        };
-
-    } else if (authChallenge.scheme.toLowerCase() === 'bearer') {
-            // log.debug({challenge: ctx.authChallenge},
-            //     'login: get Bearer auth token');
-
-        authInfo = {
-            type: 'Bearer',
-            token: await _getToken({
-                indexName: index.name,
-                realm: authChallenge.parms.realm,
-                service: authChallenge.parms.service,
-                scopes: scope ? [scope] : [],
-                username: opts.username,
-                password: opts.password,
-                // HTTP client opts:
-                // log: log,
-                // agent: opts.agent,
-                // proxy: opts.proxy,
-                userAgent: opts.userAgent,
-                insecure: opts.insecure
-            }),
-        };
-
-    } else throw new Error(
-        `unsupported auth scheme: "${authChallenge.scheme}"`);
-
-    // log.trace({err: err, success: !err}, 'login: done');
-    return {
-        status: 'Login Succeeded',
-        authInfo: authInfo,
-    };
-}
-
-
 /**
  * Calculate the 'Docker-Content-Digest' header for the given manifest.
  *
@@ -920,6 +597,7 @@ export async function login(opts: {
 
 
 export class RegistryClientV2 {
+    readonly version = 2;
     insecure: boolean;
     repo: RegistryImage;
     acceptManifestLists: boolean;
@@ -947,7 +625,10 @@ export class RegistryClientV2 {
     constructor(opts: RegistryClientOpts) {
         this.insecure = Boolean(opts.insecure);
         if (opts.repo) {
-            this.repo = deepObjCopy(opts.repo);
+            this.repo = {
+                ...opts.repo,
+                index: { ...opts.repo.index },
+            };
         } else if (opts.name) {
             this.repo = parseRepo(opts.name);
         } else throw new Error(`name or repo required`);
@@ -964,7 +645,7 @@ export class RegistryClientV2 {
         }
 
         this.acceptManifestLists = opts.acceptManifestLists || false;
-        this.maxSchemaVersion = opts.maxSchemaVersion || 1;
+        this.maxSchemaVersion = opts.maxSchemaVersion || 1; // TODO: newer default
         this.username = opts.username;
         this.password = opts.password;
         this.scopes = opts.scopes ?? ['pull'];
@@ -1009,34 +690,186 @@ export class RegistryClientV2 {
         });
     }
 
-//     Object.defineProperty(this, '_httpapi', {
-//         get: function () {
-//             if (this.__httpapi === undefined) {
-//                 this.__httpapi = new restifyClients.HttpClient(common.objMerge({
-//                     url: this._url
-//                 }, this._commonHttpClientOpts));
-//                 this._clientsToClose.push(this.__httpapi);
-//             }
-//             return this.__httpapi;
-//         }
-//     });
-
-
-    version = 2;
-
     /**
      * Ping the base URL.
-     * https://docs.docker.com/registry/spec/api/#base
+     * See: <https://docs.docker.com/registry/spec/api/#base>
+     *
+     * Use `res.status` to infer information:
+     *          404     This registry URL does not support the v2 API.
+     *          401     Authentication is required (or failed). Use the
+     *                  WWW-Authenticate header for the appropriate auth method.
+     *                  This `res` can be passed to `login()` to handle
+     *                  authenticating.
+     *          200     Successful authentication. The response body is `body`
+     *                  if wanted.
      */
-    ping() {
-        return ping({
-            index: this.repo.index,
-            // username: this.username,
-            // password: this.password,
-            // authInfo: this._authInfo,
-            ...this._commonHttpClientOpts,
+    async ping(opts: {headers?: Headers} = {}) {
+        const resp = await this._api.get({
+            path: '/v2/',
+            headers: opts.headers,
+            expectStatus: [200, 401, 404],
+            // Ping should be fast. We don't want 15s of retrying.
+            retry: false,
+            connectTimeout: 10000,
         });
-    };
+        await resp.dockerBody();
+        return resp;
+    }
+
+    /**
+     * Login V2
+     *
+     * Typically one does not need to call this function directly because most
+     * methods of a `RegistryClientV2` will automatically login as necessary.
+     * Once exception is the `ping` method, which intentionally does not login.
+     * That is because the point of the ping is to determine quickly if the
+     * registry supports v2, which doesn't require the extra work of logging in.
+     *
+     * This attempts to reproduce the logic of "docker.git:registry/auth.go#loginV2"
+     *
+     * @param opts {Object}
+     *      - opts.username {String} Optional. Username and password are optional
+     *        to allow `RegistryClientV2` to use `login` in the common case when
+     *        there may or may not be auth required.
+     *      - opts.password {String} Optional, but required if `opts.username` is
+     *        provided.
+     *      - opts.scope {String} Optional. A scope string passed in for
+     *        bearer/token auth. If this is just a login request where the token
+     *        won't be used, then the empty string (the default) is sufficient.
+     *        // JSSTYLED
+     *        See <https://github.com/docker/distribution/blob/master/docs/spec/auth/token.md#requesting-a-token>
+     *      - opts.pingRes {Object} Optional. The response object from an earlier
+     *        `ping()` call. This can be used to save re-pinging.
+     *      ...
+     * @return an object with authentication info, examples:
+     *                          {type: 'Basic', username: '...', password: '...'}
+     *                          {type: 'Bearer', token: '...'}
+     *                          {type: 'None'}
+     */
+    async performLogin(opts: {
+        username?: string;
+        password?: string;
+        scope?: string;
+        pingRes?: Response;
+    }): Promise<AuthInfo> {
+        let chalHeader = opts.pingRes?.headers.get('www-authenticate');
+        if (!chalHeader) {
+            const res = await this.ping();
+            if (res.status === 200) {
+                // No authorization is necessary.
+                return { type: 'None' };
+            } else if (res.status === 401) {
+                chalHeader = res.headers.get('www-authenticate');
+            } else throw new Error(`HTTP ${res.status} from ping endpoint`);
+        };
+        if (!chalHeader) throw new Error(
+            'missing WWW-Authenticate header in 401 ' +
+            'response to "GET /v2/" (see ' +
+            /* JSSTYLED */
+            'https://docs.docker.com/registry/spec/api/#api-version-check)');
+        const authChallenge = _parseWWWAuthenticate(chalHeader);
+
+        if (authChallenge.scheme.toLowerCase() === 'basic') {
+            return {
+                type: 'Basic',
+                username: opts.username ?? '',
+                password: opts.password ?? ''
+            };
+        }
+
+        if (authChallenge.scheme.toLowerCase() === 'bearer') {
+            // log.debug({challenge: ctx.authChallenge},
+            //     'login: get Bearer auth token');
+            return {
+                type: 'Bearer',
+                token: await this._getToken({
+                    realm: authChallenge.parms.realm,
+                    service: authChallenge.parms.service,
+                    scopes: opts.scope ? [opts.scope] : [],
+                    username: opts.username,
+                    password: opts.password,
+                }),
+            };
+        }
+
+        throw new Error(
+            `unsupported auth scheme: "${authChallenge.scheme}"`);
+    }
+
+    /**
+     * Get an auth token.
+     *
+     * See: docker/docker.git:registry/token.go
+     */
+    async _getToken(opts: {
+        realm: string;
+        service?: string;
+        scopes?: string[];
+        username?: string;
+        password?: string;
+    }): Promise<string> {
+        // - add https:// prefix (or http) if none on 'realm'
+        var tokenUrl = opts.realm;
+        var match = /^(\w+):\/\//.exec(tokenUrl);
+        if (!match) {
+            tokenUrl = (this.insecure ? 'http' : 'https') + '://' + tokenUrl;
+        } else if (['http', 'https'].indexOf(match[1]) === -1) {
+            throw new Error('unsupported scheme for ' +
+                `WWW-Authenticate realm "${opts.realm}": "${match[1]}"`);
+        }
+
+        // - GET $realm
+        //      ?service=$service
+        //      (&scope=$scope)*
+        //      (&account=$username)
+        //   Authorization: Basic ...
+        var headers = new Headers;
+        var query = new URLSearchParams;
+        if (opts.service) {
+            query.set('service', opts.service);
+        }
+        if (opts.scopes && opts.scopes.length) {
+            for (const scope of opts.scopes) {
+                query.append('scope', scope);  // intentionally singular 'scope'
+            }
+        }
+        if (opts.username) {
+            query.set('account', opts.username);
+            _setAuthHeaderFromAuthInfo(headers, {
+                type: 'Basic',
+                username: opts.username,
+                password: opts.password ?? '',
+            });
+        }
+        if (query.toString()) {
+            tokenUrl += '?' + query.toString();
+        }
+        // log.trace({tokenUrl: tokenUrl}, '_getToken: url');
+
+        var parsedUrl = new URL(tokenUrl);
+        var client = new DockerJsonClient({
+            url: parsedUrl.origin,
+            ...this._commonHttpClientOpts
+        });
+        const resp = await client.get({
+            path: parsedUrl.href.slice(parsedUrl.origin.length),
+            headers: headers,
+            expectStatus: [200, 401],
+        });
+        if (resp.status === 401) {
+            // Convert *all* 401 errors to use a generic error constructor
+            // with a simple error message.
+            var errMsg = _getRegistryErrorMessage(await resp.dockerJson());
+            throw new Error('Registry 401 - Auth failed: '+errMsg);
+        }
+        const body = await resp.dockerJson();
+        if (typeof body.token !== 'string') {
+            console.log('auth resp:', body);
+            throw new Error('authorization ' +
+                'server did not include a token in the response');
+        }
+        return body.token;
+    }
 
 
     /**
@@ -1074,18 +907,16 @@ export class RegistryClientV2 {
             return;
         }
 
-        const result = await login({
-            index: this.repo.index,
+        const authInfo = await this.performLogin({
             username: this.username,
             password: this.password,
             pingRes: opts.pingRes,
             scope: scope,
-            ...this._commonHttpClientOpts,
         });
         this._loggedIn = true;
         this._loggedInScope = scope;
-        this._authInfo = result.authInfo;
-        _setAuthHeaderFromAuthInfo(this._headers, this._authInfo);
+        this._authInfo = authInfo;
+        _setAuthHeaderFromAuthInfo(this._headers, authInfo);
         // this.log.trace({err: err, loggedIn: this._loggedIn}, 'login: done');
     };
 
@@ -1112,17 +943,10 @@ export class RegistryClientV2 {
         if (header) {
             /*
                 * Space- or comma-separated. The latter occurs if there are
-                * two separate headers, e.g.:
-                *      $ curl -i https://registry.example.com/v2/
-                *      HTTP/1.1 200 OK
-                *      ...
-                *      Docker-Distribution-Api-Version: registry/2.0
-                *      ...
-                *      Docker-Distribution-Api-Version: \
+                * two separate headers.
                 */
-            // JSSTYLED
             var versions = header.split(/[\s,]+/g);
-            if (versions.indexOf('registry/2.0') !== -1) {
+            if (versions.includes('registry/2.0')) {
                 return true;
             }
         }
@@ -1130,20 +954,7 @@ export class RegistryClientV2 {
     };
 
 
-    async listTags(): Promise<{
-        name: string;
-        tags: string[];
-        // these seem GCR specific
-        child?: string[];
-        manifest?: Record<string, {
-            imageSizeBytes: string;
-            layerId?: string;
-            mediaType: string;
-            tag: string[];
-            timeCreatedMs: string;
-            timeUploadedMs: string;
-        }>;
-    }> {
+    async listTags(): Promise<TagList> {
         await this.login();
         const res = await this._api.get({
             path: `/v2/${encodeURI(this.repo.remoteName!)}/tags/list`,
@@ -1189,7 +1000,7 @@ export class RegistryClientV2 {
             path: `/v2/${encodeURI(this.repo.remoteName ?? '')}/manifests/${encodeURI(opts.ref)}`,
             headers: headers,
             redirect: opts.followRedirects == false ? 'manual' : 'follow',
-            expectStatus: opts.followRedirects == false ? [200, 301,302,307] : [200],
+            expectStatus: [200]
         }).catch(err => {
             if (err.resp?.status === 401) {
                 // Convert into a 404 error.
@@ -1202,10 +1013,6 @@ export class RegistryClientV2 {
             }
             throw err;
         });
-
-        if (resp.status > 300 && resp.status < 400) {
-            return {resp};
-        }
 
         const manifest = await resp.dockerJson() as Manifest;
 
@@ -1408,105 +1215,71 @@ export class RegistryClientV2 {
     };
 
 
-// /**
-//  * Get a *paused* readable stream to the given blob.
-//  * <https://docs.docker.com/registry/spec/api/#get-blob>
-//  *
-//  * Possible usage:
-//  *
-//  *      client.createBlobReadStream({digest: DIGEST}, function (err, stream) {
-//  *          var fout = fs.createWriteStream('/var/tmp/blob-%s.file', DIGEST);
-//  *          fout.on('finish', function () {
-//  *              console.log('Done downloading blob', DIGEST);
-//  *          });
-//  *          stream.pipe(fout);
-//  *          stream.resume();
-//  *      });
-//  *
-//  * See "examples/v2/downloadBlob.js" for a more complete example.
-//  * This stream will verify 'Docker-Content-Digest' and 'Content-Length'
-//  * response headers, calling back with `BadDigestError` if they don't verify.
-//  *
-//  * Note: While the spec says the registry response will include the
-//  * Docker-Content-Digest and Content-Length headers, there is a suggestion that
-//  * this was added to the spec in rev "a", see
-//  * <https://docs.docker.com/registry/spec/api/#changes>. Also, if I read it
-//  * correctly, it looks like Docker's own registry client code doesn't
-//  * require those headers:
-//  *     // JSSTYLED
-//  *     https://github.com/docker/distribution/blob/master/registry/client/repository.go#L220
-//  * So this implementation won't require them either.
-//  *
-//  * @param opts {Object}
-//  *      - digest {String}
-//  * @param cb {Function} `function (err, stream, ress)`
-//  *      The `stream` is also an HTTP response object, i.e. headers are on
-//  *      `stream.headers`. `ress` (plural of 'res') is an array of responses
-//  *      after following redirects. The latest response is the same object
-//  *      as `stream`. The full set of responses are returned mainly because
-//  *      headers on both the first, e.g. 'Docker-Content-Digest', and last,
-//  *      e.g. 'Content-Length', might be interesting.
-//  */
-// createBlobReadStream(opts, cb) {
-//     this._headOrGetBlob({
-//         method: 'get',
-//         digest: opts.digest
-//     }, function (err, ress) {
-//         if (err) {
-//             return cb(err, null, ress);
-//         }
+    /**
+     * Get a ReadableStream to the given blob.
+     * <https://docs.docker.com/registry/spec/api/#get-blob>
+     *
+     * Possible usage:
+     *
+     *      const {stream} = await client.createBlobReadStream({digest: DIGEST});
+     *      const file = await Deno.create(`/var/tmp/blob-${DIGEST}.file`);
+     *      for await (const chunk of stream) {
+     *          await Deno.writeAll(chunk, myFile);
+     *      }
+     *      file.close();
+     *      console.log('Done downloading blob', DIGEST);
 
-//         var stream = ress[ress.length - 1];
-//         var numBytes = 0;
+     *
+     * See "examples/v2/downloadBlob.ts" for a more complete example.
+     * This stream will verify 'Docker-Content-Digest' and 'Content-Length'
+     * response headers, calling back with `BadDigestError` if they don't verify.
+     *
+     * Note: While the spec says the registry response will include the
+     * Docker-Content-Digest and Content-Length headers, there is a suggestion that
+     * this was added to the spec in rev "a", see
+     * <https://docs.docker.com/registry/spec/api/#changes>. Also, if I read it
+     * correctly, it looks like Docker's own registry client code doesn't
+     * require those headers:
+     *     // JSSTYLED
+     *     https://github.com/docker/distribution/blob/master/registry/client/repository.go#L220
+     * So this implementation won't require them either.
+     *
+     * @param opts {Object}
+     *      - digest {String}
+     * @return
+     *      The `stream` is a W3C ReadableStream.
+     *      `ress` (plural of 'res') is an array of responses
+     *      after following redirects. The latest response is where `stream`
+     *      came from. The full set of responses are returned mainly because
+     *      headers on both the first, e.g. 'Docker-Content-Digest', and last,
+     *      e.g. 'Content-Length', might be interesting.
+     */
+    async createBlobReadStream(opts: {
+        digest: string;
+    }) {
+        const ress = await this._headOrGetBlob({
+            method: 'GET',
+            digest: opts.digest,
+        });
+        let stream = ress[ress.length - 1].dockerStream();
 
-//         var dcdInfo;
-//         var dcdHeader = ress[0].headers['docker-content-digest'];
-//         if (dcdHeader) {
-//             try {
-//                 dcdInfo = _parseDockerContentDigest(dcdHeader);
-//             } catch (parseErr) {
-//                 return cb(new restifyErrors.BadDigestError(fmt(
-//                     'could not parse Docker-Content-Digest header, "%s": %s',
-//                     dcdHeader)));
-//             }
-//             if (dcdInfo.raw !== opts.digest) {
-//                 return cb(new restifyErrors.BadDigestError(fmt(
-//                     'Docker-Content-Digest header, %s, does not match ' +
-//                     'given digest, %s', dcdInfo.raw, opts.digest)));
-//             }
-//         } else {
-//             stream.log.debug({headers: ress[0].headers},
-//                 'no Docker-Content-Digest header on GetBlob response');
-//         }
+        var dcdHeader = ress[0].headers.get('docker-content-digest');
+        if (dcdHeader) {
+            const dcdInfo = _parseDockerContentDigest(dcdHeader);
+            if (dcdInfo.raw !== opts.digest) {
+                throw new Error(
+                    `Docker-Content-Digest header, ${dcdInfo.raw}, does not match ` +
+                    `given digest, ${opts.digest}`);
+            }
 
-//         stream.on('data', function (chunk) {
-//             numBytes += chunk.length;
-//             if (dcdInfo) {
-//                 dcdInfo.hash.update(chunk);
-//             }
-//         });
-//         stream.on('end', function () {
-//             var cLen = Number(stream.headers['content-length']);
-//             if (!isNaN(cLen) && numBytes !== cLen) {
-//                 stream.emit('error', new errors.DownloadError(fmt(
-//                     'unexpected downloaded size: expected %d bytes, ' +
-//                     'downloaded %d bytes', cLen, numBytes)));
-//             } else if (dcdInfo) {
-//                 var digest = dcdInfo.hash.digest('hex');
-//                 if (dcdInfo.expectedDigest !== digest) {
-//                     stream.log.trace({expectedDigest: dcdInfo.expectedDigest,
-//                         header: dcdInfo.raw, digest: digest},
-//                         'Docker-Content-Digest failure');
-//                     stream.emit('error', new restifyErrors.BadDigestError(
-//                         'Docker-Content-Digest'));
-//                 }
-//             }
-//         });
+            stream = stream.pipeThrough(dcdInfo.validationStream);
+        } else {
+            // stream.log.debug({headers: ress[0].headers},
+            console.debug('no Docker-Content-Digest header on GetBlob response');
+        }
 
-//         cb(null, stream, ress);
-//     });
-// };
-
+        return { ress, stream };
+    };
 
 
 // /*

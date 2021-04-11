@@ -31,8 +31,8 @@ export const DEFAULT_LOGIN_SERVERNAME = 'https://index.docker.io/v1/';
 // 'DEFAULTTAG' from https://github.com/docker/docker/blob/0c7b51089c8cd7ef3510a9b40edaa139a7ca91aa/graph/tags.go#L25
 export const DEFAULT_TAG = 'latest';
 
-var VALID_NS = /^[a-z0-9\._-]*$/;
-var VALID_REPO = /^[a-z0-9_\/\.-]*$/;
+const VALID_NS = /^[a-z0-9\._-]*$/;
+const VALID_REPO = /^[a-z0-9_\/\.-]*$/;
 
 
 // --- exports
@@ -323,12 +323,6 @@ export function urlFromIndex(index: RegistryIndex) {
     } else {
         return `${index.scheme || 'https'}://${index.name}`;
     }
-}
-
-
-export function deepObjCopy<T>(obj: T): T {
-    // Obviously this is limited and not efficient.
-    return JSON.parse(JSON.stringify(obj));
 }
 
 

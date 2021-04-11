@@ -3,47 +3,7 @@
  * Copyright (c) 2015, Joyent, Inc.
  */
 
-/*
- * Adapted from
- * <github.com/mcavage/node-restify/blob/master/lib/clients/string_client.js>
- * now at <https://github.com/restify/clients/blob/master/lib/StringClient.js>
- *
- * This subclasses the Restify StringClient to add the following features:
- *
- * 1. Extend the callback from
- *      callback(err, req, res, <JSON-parsed-body>);
- *    to:
- *      callback(err, req, res, <JSON-parsed-body>, <raw-body (Buffer)>);
- *    This allows one to work on the raw body for special case handling, if
- *    wanted. I wouldn't propose this for restify core because it shouldn't
- *    add features that make it harder to go all streaming.
- *
- * 2. In restify.JsonClient, if the body is not parseable JSON, it log.trace's
- *    an error, and returns `{}` (see mcavage/restify#388). I don't particularly
- *    like that because it is ambiguous (and also disallows returning a JSON
- *    body that is false-y: `false`, `0`, `null`).
- *
- *    Instead this client will do the following:
- *    (a) If the response is an error status (>=400), then return `undefined`
- *        for the body. This allows the caller to know if the body was parsed
- *        because `undefined` is not representable in JSON.
- *    (b) If the response is a success (<400), then return an InvalidContent
- *        restify error.
- *
- *    (TODO: I'd support this for restify code, but it *is* backward
- *    incompatible.)
- *
- * 3. `.write()` doesn't default a null `body` to `{}`.
- *    This change isn't because I came across the need for it, but because that
- *    just seems wrong.
- *
- * 4. Doesn't set `res.body` which restify's StringClient.parse seems to do
- *    ... as an accident of history I'm guessing?
- */
-
 import { Md5 } from "https://deno.land/std@0.92.0/hash/md5.ts";
-import { gunzip } from "https://deno.land/x/compress@v0.3.7/gzip/gzip.ts";
-import * as Base64 from "https://deno.land/std@0.92.0/encoding/base64.ts";
 
 // --- API
 
@@ -125,23 +85,9 @@ export class DockerResponse extends Response {
         // Content-MD5 check.
         const contentMd5 = this.headers.get('content-md5');
         if (contentMd5 && this.status !== 206) {
-            const hash = new Md5();
-            hash.update(bytes);
-            const digest = Base64.encode(hash.digest());
+            const digest = new Md5().update(bytes).toString('base64');
             if (contentMd5 !== digest) throw new Error(
                 `BadDigestError: Content-MD5 (${contentMd5} vs ${digest})`);
-        }
-
-        // Decompression
-        if (this.headers.get('content-encoding') === 'gzip') {
-            body = gunzip(body);
-        }
-
-        // Content-Length check
-        const contentLength = Number(this.headers.get('content-length') ?? undefined);
-        if (!isNaN(contentLength) && body.length !== contentLength) {
-            throw new Error(
-                `Incomplete content: Content-Length:${contentLength} but got ${body.length} or ${bytes.length} bytes`);
         }
 
         this.decodedBody = body;
@@ -150,24 +96,17 @@ export class DockerResponse extends Response {
 
     async dockerJson() {
         const body = this.decodedBody ?? await this.dockerBody();
+        const text = new TextDecoder().decode(body);
+        if (text.trim().length == 0) return undefined;
 
         // Parse the body as JSON, if we can.
-        // Note: This regex-based trim works on a buffer. `trim()` doesn't.
-        const text = new TextDecoder().decode(body);
-        if (text.length > 0 && !/^\s*$/.test(text)) {  // Skip all-whitespace body.
-            try {
-                return JSON.parse(text);
-            } catch (jsonErr) {
-                // res.log.trace(jsonErr, 'Invalid JSON in response');
-                // if (!resErr) {
-                    // TODO: Does this mask other error statuses?
-                    throw new Error(
-                        'Invalid JSON in response: '+jsonErr.message);
-                // }
-            }
+        try {
+            return JSON.parse(text);
+        } catch (jsonErr) {
+            // res.log.trace(jsonErr, 'Invalid JSON in response');
+            throw new Error(
+                'Invalid JSON in response: '+jsonErr.message);
         }
-
-        return undefined;
     }
 
     async dockerError(baseMsg: string) {
@@ -204,5 +143,29 @@ export class DockerResponse extends Response {
         (err as any).restCode = restCode;
         (err as any).restText = restText;
         return err;
+    }
+
+    dockerStream() {
+        if (!this.body) throw new Error(`No body to stream`);
+        let stream = this.body;
+
+        // Content-MD5 check.
+        const contentMd5 = this.headers.get('content-md5');
+        if (contentMd5 && this.status !== 206) {
+            const hash = new Md5();
+            stream = stream.pipeThrough(new TransformStream({
+                transform(chunk, controller) {
+                    hash.update(chunk);
+                    controller.enqueue(chunk);
+                },
+                flush(controller) {
+                    const digest = hash.toString('base64');
+                    if (contentMd5 !== digest) controller.error(new Error(
+                        `BadDigestError: Content-MD5 (${contentMd5} vs ${digest})`));
+                },
+            }));
+        }
+
+        return stream;
     }
 }

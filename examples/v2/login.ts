@@ -33,7 +33,7 @@
 /* END JSSTYLED */
 
 import { mainline } from "../mainline.ts";
-import { login } from "../../lib/registry-client-v2.ts";
+import { createClient } from "../../lib/registry-client-v2.ts";
 
 
 // --- globals
@@ -46,11 +46,11 @@ var indexName = args[0] || 'https://index.docker.io/v1/';
 var username = opts.username || prompt('Username:')?.trim();
 var password = opts.password || prompt('Password:')?.trim();
 
-const result = await login({
-    indexName: indexName,
-    // TODO: insecure: insecure,
+const client = createClient({
+    name: indexName,
     // auth info:
     username: username,
     password: password,
 });
+const result = await client.login();
 console.log('Result:', JSON.stringify(result, null, 4));

@@ -11,7 +11,8 @@
 import { assertEquals, assert, assertThrowsAsync } from "https://deno.land/std@0.92.0/testing/asserts.ts";
 import { createClient, MEDIATYPE_MANIFEST_LIST_V2 } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
-import { Manifest } from "../lib/types.ts";
+import { Manifest, ManifestV2 } from "../lib/types.ts";
+import { Sha256 } from "https://deno.land/std@0.92.0/hash/sha256.ts";
 
 // --- globals
 
@@ -25,6 +26,8 @@ function getFirstLayerDigestFromManifest(manifest: Manifest) {
     if (manifest.schemaVersion === 1) {
         return manifest.fsLayers![0].blobSum;
     }
+    if (manifest.mediaType === MEDIATYPE_MANIFEST_LIST_V2) throw new Error(
+        `unexpected list manifest`);
     return manifest.layers![0].digest;
 }
 
@@ -80,12 +83,13 @@ Deno.test('v2 docker.io / getManifest (v2.1)', async () => {
     const {manifest} = await client.getManifest({ref: TAG});
     assert(manifest);
     assertEquals(manifest.schemaVersion, 1);
+    assert(manifest.schemaVersion === 1);
     assertEquals(manifest.name, repo.remoteName);
     assertEquals(manifest.tag, TAG);
     assert(manifest.architecture);
     assert(manifest.fsLayers);
-    assert(manifest.history![0].v1Compatibility);
-    assert(manifest.signatures![0].signature);
+    assert(manifest.history[0].v1Compatibility);
+    assert(manifest.signatures?.[0].signature);
 });
 
 /*
@@ -105,7 +109,7 @@ Deno.test('v2 docker.io / getManifest (v2.1)', async () => {
     *   ]
     * }
     */
-let _manifest: Manifest | null;
+let _manifest: ManifestV2 | null;
 let _manifestDigest: string | null;
 Deno.test('v2 docker.io / getManifest (v2.2 list)', async () => {
     const client = createClient({ repo });
@@ -117,8 +121,10 @@ Deno.test('v2 docker.io / getManifest (v2.2 list)', async () => {
     const {manifest} = await client.getManifest(getOpts);
     assert(manifest);
     assertEquals(manifest.schemaVersion, 2);
+    assert(manifest.schemaVersion === 2);
     assertEquals(manifest.mediaType, MEDIATYPE_MANIFEST_LIST_V2,
         'mediaType should be manifest list');
+    assert(manifest.mediaType === MEDIATYPE_MANIFEST_LIST_V2);
     assert(Array.isArray(manifest.manifests), 'manifests is an array');
     manifest.manifests.forEach(function (m) {
         assert(m.digest, 'm.digest');
@@ -152,9 +158,11 @@ Deno.test('v2 docker.io / getManifest (v2.2)', async () => {
     const client = createClient({ repo });
     var getOpts = {ref: TAG, maxSchemaVersion: 2};
     const {manifest} = await client.getManifest(getOpts);
-    _manifest = manifest ?? null;
     assert(manifest);
     assertEquals(manifest.schemaVersion, 2);
+    assert(manifest.schemaVersion === 2);
+    assert(manifest.mediaType !== MEDIATYPE_MANIFEST_LIST_V2);
+    _manifest = manifest;
     assert(manifest.config);
     assert(manifest.config.digest, manifest.config.digest);
     assert(manifest.layers);
@@ -181,6 +189,8 @@ Deno.test('v2 docker.io / getManifest (by digest)', async () => {
     const {manifest} = await client.getManifest(getOpts);
     assert(manifest, 'Got the manifest object');
     assertEquals(_manifest!.schemaVersion, manifest.schemaVersion);
+    assert(manifest.schemaVersion === 2);
+    assert(manifest.mediaType !== MEDIATYPE_MANIFEST_LIST_V2);
     assertEquals(_manifest!.config, manifest.config);
     assertEquals(_manifest!.layers, manifest.layers);
 });
@@ -251,58 +261,48 @@ Deno.test('v2 docker.io / headBlob (unknown digest)', async () => {
     //     'registry/2.0');
 });
 
-// Deno.test('v2 docker.io / createBlobReadStream', async () => {
-//     const client = createClient({ repo });
-//     var digest = getFirstLayerDigestFromManifest(manifest);
-//     client.createBlobReadStream({digest: digest},
-//             function (err, stream, ress) {
-//         t.ifErr(err, 'createBlobReadStream err');
+Deno.test('v2 docker.io / createBlobReadStream', async () => {
+    if (!_manifestDigest || !_manifest) throw new Error('cannot test');
+    const client = createClient({ repo });
+    const digest = getFirstLayerDigestFromManifest(_manifest);
+    const {ress, stream} = await client.createBlobReadStream({digest: digest});
+    assert(ress, 'got responses');
+    assert(Array.isArray(ress), 'ress is an array');
 
-//         assert(ress, 'got responses');
-//         assert(Array.isArray(ress), 'ress is an array');
-//         var first = ress[0];
-//         assert(first.status === 200 || first.status === 307,
-//             'createBlobReadStream first res statusCode is 200 or 307');
-//         if (first.headers['docker-content-digest']) {
-//             assertEquals(first.headers['docker-content-digest'], digest,
-//                 '"docker-content-digest" header from first response is '
-//                 + 'the queried digest');
-//         }
-//         assertEquals(first.headers['docker-distribution-api-version'],
-//             'registry/2.0',
-//             '"docker-distribution-api-version" header is "registry/2.0"');
+    const first = ress[0];
+    assert(first.status === 200 || first.status === 307,
+        'createBlobReadStream first res statusCode is 200 or 307');
+    if (first.headers.get('docker-content-digest')) {
+        assertEquals(first.headers.get('docker-content-digest'), digest,
+            '"docker-content-digest" header from first response is '
+            + 'the queried digest');
+    }
+    assertEquals(first.headers.get('docker-distribution-api-version'),
+        'registry/2.0',
+        '"docker-distribution-api-version" header is "registry/2.0"');
 
-//         assert(stream, 'got a stream');
-//         assertEquals(stream.status, 200, 'stream statusCode is 200');
-//         assertEquals(stream.headers['content-type'], 'application/octet-stream');
-//         assert(stream.headers['content-length'] !== undefined,
-//             'got a "content-length" header');
+    const last = ress.slice(-1)[0];
+    assert(last, 'got a stream');
+    assertEquals(last.status, 200, 'stream statusCode is 200');
+    assertEquals(last.headers.get('content-type'), 'application/octet-stream');
+    assert(last.headers.get('content-length') !== undefined,
+        'got a "content-length" header');
 
-//         var numBytes = 0;
-//         var hash = crypto.createHash(digest.split(':')[0]);
-//         stream.on('data', function (chunk) {
-//             hash.update(chunk);
-//             numBytes += chunk.length;
-//         });
-//         stream.on('end', function () {
-//             assertEquals(hash.digest('hex'), digest.split(':')[1]);
-//             assertEquals(numBytes, Number(stream.headers['content-length']));
-//         //         });
-//         stream.resume();
-//     });
-// });
+    var numBytes = 0;
+    const hash = new Sha256();
+    for await (const chunk of stream) {
+        hash.update(chunk);
+        numBytes += chunk.length;
+    }
+    assertEquals(hash.hex(), digest.split(':')[1]);
+    assertEquals(numBytes, Number(last.headers.get('content-length')));
+});
 
-// Deno.test('v2 docker.io / createBlobReadStream (unknown digest)', async () => {
-//     const client = createClient({ repo });
-//     client.createBlobReadStream({digest: 'cafebabe'},
-//             function (err, stream, ress) {
-//         assert(err);
-//         assert(ress);
-//         assert(Array.isArray(ress));
-//         assertEquals(ress.length, 1);
-//         var res = ress[0];
-//         assertEquals(res.status, 404);
-//         assertEquals(res.headers['docker-distribution-api-version'],
-//             'registry/2.0');
-//     //     });
-// });
+Deno.test('v2 docker.io / createBlobReadStream (unknown digest)', async () => {
+    const client = createClient({ repo });
+    await assertThrowsAsync(async () => {
+        await client.createBlobReadStream({digest: 'cafebabe'})
+    }, Error, ' 404 ');
+    // assertEquals(res.headers['docker-distribution-api-version'],
+    //     'registry/2.0');
+});

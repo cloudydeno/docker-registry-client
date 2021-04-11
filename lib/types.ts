@@ -16,6 +16,22 @@ export interface RegistryImage {
 }
 
 
+export interface TagList {
+  name: string;
+  tags: string[];
+  // these seem GCR specific:
+  child?: string[];
+  manifest?: Record<string, {
+      imageSizeBytes: string;
+      layerId?: string;
+      mediaType: string;
+      tag: string[];
+      timeCreatedMs: string;
+      timeUploadedMs: string;
+  }>;
+};
+
+
 export type Manifest =
 | ManifestV1
 | ManifestV2

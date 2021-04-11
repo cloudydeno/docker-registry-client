@@ -12,7 +12,7 @@
  * Test v2 Registry API against <registry.access.redhat.com>.
  */
 
-import { assertEquals, assert } from "https://deno.land/std@0.92.0/testing/asserts.ts";
+import { assertEquals, assert, assertThrowsAsync } from "https://deno.land/std@0.92.0/testing/asserts.ts";
 import { createClient } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
 
@@ -52,9 +52,10 @@ Deno.test('v2 registry.access.redhat.com / ping', async () => {
 
 Deno.test('v2 registry.access.redhat.com / getManifest (no redirects)', async () => {
     const client = createClient(clientOpts);
-    const {resp} = await client.getManifest({ref: TAG, followRedirects: false});
     // Should get a 302 error.
-    assertEquals(resp.status, 302, 'statusCode should be 302');
+    await assertThrowsAsync(async () => {
+        await client.getManifest({ref: TAG, followRedirects: false});
+    }, Error, ' 302 ');
 });
 
 Deno.test('v2 registry.access.redhat.com / getManifest (redirected)', async () => {
@@ -62,6 +63,7 @@ Deno.test('v2 registry.access.redhat.com / getManifest (redirected)', async () =
     const {manifest} = await client.getManifest({ref: TAG});
     assert(manifest, 'Got the manifest');
     assertEquals(manifest.schemaVersion, 1);
+    assert(manifest.schemaVersion == 1);
     assertEquals(manifest.name, repo.remoteName);
     assertEquals(manifest.tag, TAG);
     assert(manifest.architecture);

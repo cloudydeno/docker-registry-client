@@ -2,7 +2,9 @@
 
 ## 0.1.1
 
-- Port headBlob
+- Port headBlob & download blob
+- Use specific error classes when appropriate
+- Eradicate v1 API from codebase
 
 ## 0.1.0
 

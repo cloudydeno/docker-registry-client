@@ -951,6 +951,7 @@ export class RegistryClientV2 {
             method: 'GET',
             path: `/v2/${encodeURI(this.repo.remoteName!)}/tags/list`,
             headers: this._headers,
+            redirect: 'follow',
         });
         return await res.dockerJson();
     };

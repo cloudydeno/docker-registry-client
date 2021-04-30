@@ -52,7 +52,11 @@ export class DockerJsonClient {
             headers: headers,
             redirect: opts.redirect ?? 'manual',
         });
-        const resp = new DockerResponse(rawResp.body, rawResp);
+        const resp = new DockerResponse(rawResp.body, {
+            headers: rawResp.headers,
+            status: rawResp.status,
+            statusText: rawResp.statusText,
+        });
 
         const expectStatus = opts.expectStatus ?? [200];
         if (!expectStatus.includes(rawResp.status)) {

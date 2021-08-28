@@ -1,9 +1,9 @@
-export { assertEquals, assert } from "https://deno.land/std@0.92.0/testing/asserts.ts";
-export { dirname } from "https://deno.land/std@0.92.0/path/posix.ts";
+export { assertEquals, assert } from "https://deno.land/std@0.105.0/testing/asserts.ts";
+export { dirname } from "https://deno.land/std@0.105.0/path/posix.ts";
 
 
-import { Sha256 } from "https://deno.land/std@0.92.0/hash/sha256.ts";
-import { assertEquals, assertThrowsAsync } from "https://deno.land/std@0.92.0/testing/asserts.ts";
+import { Sha256 } from "https://deno.land/std@0.105.0/hash/sha256.ts";
+import { assert, assertEquals, assertThrowsAsync } from "https://deno.land/std@0.105.0/testing/asserts.ts";
 
 import { HttpError } from "../lib/errors.ts";
 import { MEDIATYPE_MANIFEST_LIST_V2 } from "../lib/registry-client-v2.ts";
@@ -15,9 +15,23 @@ export async function assertThrowsHttp<T = void>(
   msgIncludes = "",
   msg?: string,
 ): Promise<HttpError> {
-  const err = await assertThrowsAsync(fn, HttpError, msgIncludes, msg) as HttpError;
-  if (statusCode) assertEquals(err.resp.status, statusCode);
-  return err;
+  let httpErr: HttpError | undefined;
+  await assertThrowsAsync(async () => {
+    try {
+      await fn()
+    } catch (err) {
+      if (err instanceof HttpError) {
+        httpErr = err;
+      }
+      throw err;
+    }
+  }, HttpError, msgIncludes, msg);
+
+  assert(httpErr);
+  if (statusCode) {
+    assertEquals(httpErr.resp.status, statusCode);
+  }
+  return httpErr;
 }
 
 export function getFirstLayerDigestFromManifest(manifest: Manifest) {
@@ -42,7 +56,7 @@ export async function hashAndCount(
     hash.update(chunk);
     numBytes += chunk.length;
   }
-  
+
   return {
     hashHex: hash.hex(),
     numBytes,

@@ -4,8 +4,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import { Sha256 } from "https://deno.land/std@0.92.0/hash/sha256.ts";
-import * as Base64url from "https://deno.land/std@0.92.0/encoding/base64url.ts";
+import { Sha256 } from "https://deno.land/std@0.105.0/hash/sha256.ts";
+import * as Base64url from "https://deno.land/std@0.105.0/encoding/base64url.ts";
 
 import {
     parseIndex, parseRepo,

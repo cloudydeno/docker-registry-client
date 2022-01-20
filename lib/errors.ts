@@ -16,8 +16,9 @@ import { DockerResponse, RegistryError } from "./types.ts";
 
 /** Base class for custom error classes. */
 export class ApiError extends Error {
-    constructor(message: string) {
-        super(message);
+    constructor(message: string, init?: ErrorInit) {
+        super(message, init);
+        this.name = new.target.name;
         Error.captureStackTrace?.(this, new.target);
     }
 }

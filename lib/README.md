@@ -80,7 +80,7 @@ equivalents in this client lib.
 | ping <br> `GET /v2/`                | Yes  | Check that the endpoint implements Docker Registry API V2. |
 | listTags <br> `GET /v2/<name>/tags/list`            | Yes  | Fetch the tags under the repository identified by `name`. |
 | getManifest <br> `GET /v2/<name>/manifests/<reference>`         | Yes | Fetch the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
-| putManifest <br> `PUT /v2/<name>/manifests/<reference>`         | No*  | Put the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
+| putManifest <br> `PUT /v2/<name>/manifests/<reference>`         | Yes  | Put the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
 | deleteManifest <br> `DELETE /v2/<name>/manifests/<reference>`      | Yes  | Delete the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
 | createBlobReadStream <br> `GET /v2/<name>/blobs/<digest>` | Yes  | Retrieve the blob from the registry identified by `digest`. |
 | headBlob <br> `HEAD /v2/<name>/blobs/<digest>`            | Yes  | Retrieve the blob from the registry identified by `digest` -- just the headers. |
@@ -91,7 +91,5 @@ equivalents in this client lib.
 | cancelBlobUpload <br> `DELETE /v2/<name>/blobs/uploads/<uuid>`    | No   | Cancel outstanding upload processes, releasing associated resources. If this is not called, the unfinished uploads will eventually timeout. |
 | deleteBlob <br> `DELETE /v2/<name>/blobs/<digest>`          | No   | Delete the blob identified by `name` and `digest`. Warning: From the Docker spec I'm not sure that `deleteBlob` doesn't corrupt images if you delete a shared blob. |
 | listRepositories <br> `GET /v2/_catalog/`    | No   | List all repositories in this registry. [Spec.](https://docs.docker.com/registry/spec/api/#listing-repositories) |
-
-*: Endpoints with Javascript implementations that haven't been partially fully ported to Deno / Typescript yet.
 
 For more code examples, check out the other folders in this Github repo.

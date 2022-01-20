@@ -25,7 +25,6 @@ import {
 import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
 import * as e from "./errors.ts";
-import { UploadError } from "./errors.ts";
 
 /*
  * Copyright 2017 Joyent, Inc.
@@ -1269,119 +1268,43 @@ export class RegistryClientV2 {
     };
 
 
-// /*
-//  * Upload an image manifest. `ref` is either a tag or a digest.
-//  * <https://docs.docker.com/registry/spec/api/#pushing-an-image>
-//  *
-//  *   client.putManifest({manifest: <string>, ref: <tag or digest>},
-//  *   function (err, res, digest, location) {
-//  *      // Digest is `res.headers['docker-content-digest']`.
-//  *   });
-//  */
-// putManifest(opts, cb) {
-//     var this = this;
-//     assert.object(opts, 'opts');
-//     assert.optionalObject(opts.log, 'opts.log');
-//     assert.string(opts.manifest, 'opts.manifest');
-//     assert.string(opts.ref, 'opts.ref');
-//     assert.func(cb, 'cb');
+    /*
+    * Upload an image manifest. `ref` is either a tag or a digest.
+    * <https://docs.docker.com/registry/spec/api/#pushing-an-image>
+    * <https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pushing-manifests>
+    *
+    *   client.putManifest({manifest: <string>, ref: <tag or digest>},
+    *   function (err, res, digest, location) {
+    *      // Digest is `res.headers['docker-content-digest']`.
+    *   });
+    */
+    async putManifest(opts: {
+        manifestData: Uint8Array;
+        ref: string;
+        schemaVersion?: number;
+        mediaType?: string;
+    }) {
+        await this.login({
+            scope: _makeAuthScope('repository', this.repo.remoteName!, ['pull', 'push']),
+        });
 
-//     // Working variables.
-//     var schemaVersion = 1;
-//     // Result variables.
-//     var digest;
-//     var location;
-//     var res;
+        const mediaType = opts.mediaType ??
+            `application/vnd.docker.distribution.manifest.v${opts.schemaVersion ?? 1}+json`
 
-//     var log = _createLogger(opts.log);
-//     log.trace({
-//         digest: opts.digest
-//     }, 'putManifest');
+        const response = await this._api.request({
+            method: 'PUT',
+            path: `/v2/${encodeURI(this.repo.remoteName!)}/manifests/${encodeURIComponent(opts.ref)}`,
+            headers: _setAuthHeaderFromAuthInfo(new Headers({
+                'content-type': mediaType,
+            }), this._authInfo ?? null),
+            body: opts.manifestData,
+            expectStatus: [201],
+        }).catch(cause => Promise.reject(new e.UploadError("Manifest upload failed.", {cause})));
 
-//     vasync.pipeline({
-//         arg: this,
-//         funcs: [
-//             function _getManifestVersion(_, next) {
-//                 try {
-//                     var manifest = JSON.parse(opts.manifest);
-//                     if (manifest.hasOwnProperty('schemaVersion')) {
-//                         schemaVersion = parseInt(manifest.schemaVersion, 10);
-//                     }
-//                 } catch (ex) {
-//                     next(new errors.InvalidManifestError(
-//                         'Unable to parse manifest string: ' + ex));
-//                     return;
-//                 }
-//                 next();
-//             },
-//             function doLogin(_, next) {
-//                 var resource = 'repository';
-//                 var actions = ['pull', 'push'];
-//                 var scope = _makeAuthScope(resource, this.repo.remoteName,
-//                     actions);
-//                 this.login({
-//                     scope: scope
-//                 }, next);
-//             },
-//             function _putManifest(_, next) {
-//                 var headers = {
-//                     'content-type': fmt(
-//                         'application/vnd.docker.distribution.manifest.v%d+json',
-//                         schemaVersion)
-//                 };
-//                 if (this._authInfo) {
-//                     _setAuthHeaderFromAuthInfo(headers, this._authInfo);
-//                 }
-//                 this._httpapi.put({
-//                     path: fmt('/v2/%s/manifests/%s',
-//                         encodeURI(this.repo.remoteName),
-//                         encodeURIComponent(opts.ref)),
-//                     headers: headers
-//                 }, function _afterCall(err, req) {
-//                     if (err) {
-//                         return next(err);
-//                     }
-
-//                     req.on('result', function onReqResult(reqErr, res_) {
-//                         res = res_;
-//                         if (reqErr) {
-//                             registryError(reqErr, res, next);
-//                             return;
-//                         }
-
-//                         var body = '';
-//                         res.on('data', function onResChunk(chunk) {
-//                             body += chunk;
-//                         });
-
-//                         res.on('end', function onResEnd() {
-//                             var errMsg = _getRegistryErrMessage(body);
-//                             if (errMsg) {
-//                                 next(new errors.UploadError(errMsg));
-//                                 return;
-//                             }
-//                             digest = res.headers['docker-content-digest'];
-//                             location = res.headers.location;
-//                             next();
-//                         });
-//                     });
-
-//                     req.on('error', function onReqError(reqErr) {
-//                         log.error({
-//                             err: reqErr
-//                         }, 'Error uploading manifest');
-//                         return next(reqErr);
-//                     });
-
-//                     req.write(opts.manifest);
-//                     req.end();
-//                 });
-//             }
-//         ]
-//     }, function _putManifestCb(err) {
-//         cb(err, res, digest, location);
-//     });
-// };
+        const digest = response.headers.get('docker-content-digest');
+        const location = response.headers.get('location');
+        return { digest, location };
+    };
 
 
     /*
@@ -1406,9 +1329,9 @@ export class RegistryClientV2 {
             path: `/v2/${encodeURI(this.repo.remoteName!)}/blobs/uploads/`,
             headers: _setAuthHeaderFromAuthInfo(new Headers(), this._authInfo ?? null),
             expectStatus: [202],
-        });
+        }).catch(cause => Promise.reject(new e.UploadError("Blob upload rejected.", {cause})));
         const uploadUrl = sessionResponse.headers.get('location');
-        if (!uploadUrl) throw new UploadError(
+        if (!uploadUrl) throw new e.UploadError(
             'No registry upload location header returned');
 
         const destinationUrl = new URL(uploadUrl);
@@ -1422,7 +1345,7 @@ export class RegistryClientV2 {
             }), this._authInfo ?? null),
             body: opts.stream,
             expectStatus: [201],
-        });
+        }).catch(cause => Promise.reject(new e.UploadError("Blob upload failed.", {cause})));
     }
 
 }

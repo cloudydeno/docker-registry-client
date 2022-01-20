@@ -14,7 +14,7 @@ import {
     hashAndCount,
 } from "./util.ts";
 
-import { createClient, digestFromManifestStr, MEDIATYPE_MANIFEST_LIST_V2 } from "../lib/registry-client-v2.ts";
+import { createClient, digestFromManifestStr, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
 import { ManifestV2 } from "../lib/types.ts";
 
@@ -153,7 +153,7 @@ Deno.test('v2 docker.io / getManifest (v2.2)', async () => {
     assert(manifest);
     assertEquals(manifest.schemaVersion, 2);
     assert(manifest.schemaVersion === 2);
-    assert(manifest.mediaType !== MEDIATYPE_MANIFEST_LIST_V2);
+    assert(manifest.mediaType === MEDIATYPE_MANIFEST_V2);
     _manifest = manifest;
     assert(manifest.config);
     assert(manifest.config.digest, manifest.config.digest);
@@ -181,7 +181,7 @@ Deno.test('v2 docker.io / getManifest (by digest)', async () => {
     assert(manifest, 'Got the manifest object');
     assertEquals(_manifest!.schemaVersion, manifest.schemaVersion);
     assert(manifest.schemaVersion === 2);
-    assert(manifest.mediaType !== MEDIATYPE_MANIFEST_LIST_V2);
+    assert(manifest.mediaType === MEDIATYPE_MANIFEST_V2);
     assertEquals(_manifest!.config, manifest.config);
     assertEquals(_manifest!.layers, manifest.layers);
 });

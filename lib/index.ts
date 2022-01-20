@@ -39,6 +39,7 @@ export async function createClient(opts: {
     insecure?: boolean;
     scheme?: string;
     acceptManifestLists?: boolean;
+    acceptOCIManifests?: boolean;
     maxSchemaVersion?: number;
     userAgent?: string;
 }) {

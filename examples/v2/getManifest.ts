@@ -21,6 +21,10 @@ const {opts, args} = mainline({
         names: ['accept-list'],
         type: 'bool',
         help: 'Accept manifest lists (multiarch support) from the registry',
+    }, {
+        names: ['accept-oci'],
+        type: 'bool',
+        help: 'Accept OCI manifests (helm charts, etc) from the registry',
     }],
 });
 var name = args[0];
@@ -38,6 +42,7 @@ var client = createClient({
     insecure: opts.insecure,
     username: opts.username,
     password: opts.password,
+    acceptOCIManifests: opts['accept-oci'],
     maxSchemaVersion: (opts.schema || 2)
 });
 var tagOrDigest = rar.tag || rar.digest || '';

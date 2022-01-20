@@ -16,9 +16,11 @@ import { RegistryImage, RegistryIndex } from "./types.ts";
 // var DEFAULT_USERAGENT = 'node-docker-registry-client/' + VERSION +
 //     ' (' + os.arch() + '-' + os.platform() + '; ' +
 //    'node/' + process.versions.node + ')';
-export const DEFAULT_USERAGENT = 'deno-docker_registry_client/' + '0.1.0' +
-' (+'+import.meta.url+'; ' +
-'deno/' + Deno.version + ')';
+const innerBits = [`deno/${Deno.version.deno}`];
+if (import.meta.url.startsWith('http')) {
+    innerBits.unshift(`+${import.meta.url}`);
+}
+export const DEFAULT_USERAGENT = `deno-docker_registry_client/0.1.0 (${innerBits.join(', ')})`;
 
 // See `INDEXNAME` in docker/docker.git:registry/config.go.
 export const DEFAULT_INDEX_NAME = 'docker.io';

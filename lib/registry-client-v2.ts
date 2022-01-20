@@ -21,6 +21,8 @@ import {
     AuthInfo,
     TagList,
     ManifestV1,
+    ManifestOCIIndex,
+    ManifestOCI,
 } from "./types.ts";
 import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
@@ -50,6 +52,10 @@ export const MEDIATYPE_MANIFEST_V2
 export const MEDIATYPE_MANIFEST_LIST_V2
     = 'application/vnd.docker.distribution.manifest.list.v2+json';
 
+export const MEDIATYPE_OCI_MANIFEST_V1
+    = 'application/vnd.oci.image.manifest.v1+json';
+export const MEDIATYPE_OCI_MANIFEST_INDEX_V1
+    = 'application/vnd.oci.image.index.v1+json';
 
 /*
  * Set the "Authorization" HTTP header into the headers object from the given
@@ -611,6 +617,7 @@ export class RegistryClientV2 {
     readonly version = 2;
     insecure: boolean;
     repo: RegistryImage;
+    acceptOCIManifests: boolean;
     acceptManifestLists: boolean;
     maxSchemaVersion: number;
     username?: string;
@@ -655,8 +662,9 @@ export class RegistryClientV2 {
             this.repo.index.scheme = 'http';
         }
 
+        this.acceptOCIManifests = opts.acceptOCIManifests || false;
         this.acceptManifestLists = opts.acceptManifestLists || false;
-        this.maxSchemaVersion = opts.maxSchemaVersion || 1; // TODO: newer default
+        this.maxSchemaVersion = opts.maxSchemaVersion || (this.acceptOCIManifests ? 2 : 1);
         this.username = opts.username;
         this.password = opts.password;
         this.scopes = opts.scopes ?? ['pull'];
@@ -971,9 +979,12 @@ export class RegistryClientV2 {
     async getManifest(opts: {
         ref: string;
         acceptManifestLists?: boolean;
+        acceptOCIManifests?: boolean;
         maxSchemaVersion?: number;
         followRedirects?: boolean;
     }) {
+        var acceptOCIManifests = opts.acceptOCIManifests
+            ?? this.acceptOCIManifests;
         var acceptManifestLists = opts.acceptManifestLists
             ?? this.acceptManifestLists;
         var maxSchemaVersion = opts.maxSchemaVersion
@@ -986,6 +997,14 @@ export class RegistryClientV2 {
             accept.push(MEDIATYPE_MANIFEST_V2);
             if (acceptManifestLists) {
                 accept.push(MEDIATYPE_MANIFEST_LIST_V2);
+            }
+            headers.set('accept', accept.join(', '));
+        }
+        if (acceptOCIManifests) {
+            const accept = this._headers.get('accept')?.split(', ') ?? [];
+            accept.push(MEDIATYPE_OCI_MANIFEST_V1);
+            if (acceptManifestLists) {
+                accept.push(MEDIATYPE_OCI_MANIFEST_INDEX_V1);
             }
             headers.set('accept', accept.join(', '));
         }
@@ -1035,10 +1054,12 @@ export class RegistryClientV2 {
                     + `${this.repo.localName}:${opts.ref} manifest`);
             }
         } else if (manifest.schemaVersion === 2) {
-            if (manifest.mediaType === MEDIATYPE_MANIFEST_LIST_V2) {
-                layers = manifest.manifests;
+            const mediaType = manifest.mediaType || resp.headers.get('content-type');
+            if (mediaType === MEDIATYPE_MANIFEST_LIST_V2
+                    || mediaType === MEDIATYPE_OCI_MANIFEST_INDEX_V1) {
+                layers = (manifest as ManifestOCIIndex).manifests;
             } else {
-                layers = manifest.layers;
+                layers = (manifest as ManifestOCI).layers;
             }
         }
         if (!layers || layers.length === 0) {

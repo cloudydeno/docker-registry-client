@@ -36,6 +36,8 @@ export type Manifest =
 | ManifestV1
 | ManifestV2
 | ManifestV2List
+| ManifestOCI
+| ManifestOCIIndex
 ;
 
 export interface ManifestV1 {
@@ -65,17 +67,15 @@ export interface ManifestV1 {
 export interface ManifestV2 {
   schemaVersion: 2;
   mediaType: "application/vnd.docker.distribution.manifest.v2+json";
-  config: {
-    mediaType: string;
-    size: number;
-    digest: string;
-  };
-  layers: Array<{
-    mediaType: string;
-    size: number;
-    digest: string;
-    urls?: string[];
-  }>;
+  config: ManifestV2Descriptor;
+  layers: Array<ManifestV2Descriptor>;
+}
+
+export interface ManifestV2Descriptor {
+  mediaType: string;
+  size: number;
+  digest: string;
+  urls?: Array<string>;
 }
 
 export interface ManifestV2List {
@@ -97,6 +97,42 @@ export interface ManifestV2List {
 }
 
 
+export interface ManifestOCI {
+  schemaVersion: 2;
+  mediaType?: "application/vnd.oci.image.manifest.v1+json";
+  config: ManifestOCIDescriptor;
+  layers: Array<ManifestOCIDescriptor>;
+  annotations?: Record<string, string>;
+}
+
+export interface ManifestOCIDescriptor {
+  mediaType: string;
+  size: number;
+  digest: string;
+  urls?: Array<string>;
+  annotations?: Record<string, string>;
+}
+
+export interface ManifestOCIIndex {
+  schemaVersion: 2;
+  mediaType?: "application/vnd.oci.image.index.v1+json";
+  manifests: Array<{
+    mediaType: string;
+    digest: string;
+    size: number;
+    platform: {
+      "architecture": string;
+      "os": string;
+      "os.version"?: string; // windows version
+      "os.features"?: string[];
+      "variant"?: string; // cpu variant
+      "features"?: string[]; // cpu features
+    };
+  }>;
+  annotations?: Record<string, string>;
+}
+
+
 export interface RegistryClientOpts {
   name?: string; // mutually exclusive with repo
   repo?: RegistryImage;
@@ -106,6 +142,7 @@ export interface RegistryClientOpts {
   token?: string; // for bearer auth
   insecure?: boolean;
   scheme?: string;
+  acceptOCIManifests?: boolean; // implies maxSchemaVersion 2
   acceptManifestLists?: boolean;
   maxSchemaVersion?: number;
   userAgent?: string;

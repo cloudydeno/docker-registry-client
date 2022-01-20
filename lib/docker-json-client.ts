@@ -10,8 +10,10 @@ import { DockerResponse as DockerResponseInterface } from "./types.ts";
 // --- API
 
 interface HttpReqOpts {
+    method: string;
     path: string;
     headers?: Headers;
+    body?: BodyInit;
     retry?: boolean;
     connectTimeout?: number;
     expectStatus?: number[];
@@ -40,7 +42,7 @@ export class DockerJsonClient {
         this.userAgent = options.userAgent;
     }
 
-    async request(opts: HttpReqOpts & { method: string; }) {
+    async request(opts: HttpReqOpts) {
         const headers = new Headers(opts.headers);
         if (!headers.has('accept') && this.accept) {
             headers.set('accept', this.accept);
@@ -51,6 +53,7 @@ export class DockerJsonClient {
             method: opts.method,
             headers: headers,
             redirect: opts.redirect ?? 'manual',
+            body: opts.body,
         });
         const resp = new DockerResponse(rawResp.body, {
             headers: rawResp.headers,

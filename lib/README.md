@@ -84,10 +84,10 @@ equivalents in this client lib.
 | deleteManifest <br> `DELETE /v2/<name>/manifests/<reference>`      | Yes  | Delete the manifest identified by `name` and `reference` where `reference` can be a tag or digest. |
 | createBlobReadStream <br> `GET /v2/<name>/blobs/<digest>` | Yes  | Retrieve the blob from the registry identified by `digest`. |
 | headBlob <br> `HEAD /v2/<name>/blobs/<digest>`            | Yes  | Retrieve the blob from the registry identified by `digest` -- just the headers. |
-| startBlobUpload <br> `POST /v2/<name>/blobs/uploads/`     | No*  | Initiate a resumable blob upload. If successful, an upload location will be provided to complete the upload. Optionally, if the `digest` parameter is present, the request body will be used to complete the upload in a single request. |
+| startBlobUpload <br> `POST /v2/<name>/blobs/uploads/`     | Yes  | Initiate a resumable blob upload. If successful, an upload location will be provided to complete the upload. Optionally, if the `digest` parameter is present, the request body will be used to complete the upload in a single request. |
 | getBlobUploadStatus <br> `GET /v2/<name>/blobs/uploads/<uuid>` | No   | Retrieve status of upload identified by `uuid`. The primary purpose of this endpoint is to resolve the current status of a resumable upload. |
 | uploadBlobChunk <br> `PATCH /v2/<name>/blobs/uploads/<uuid>`     | No   | Upload a chunk of data for the specified upload. |
-| completeBlobUpload <br> `PUT /v2/<name>/blobs/uploads/<uuid>`  | No*  | Complete the upload specified by `uuid`, optionally appending the body as the final chunk. |
+| completeBlobUpload <br> `PUT /v2/<name>/blobs/uploads/<uuid>`  | Yes  | Complete the upload specified by `uuid`, optionally appending the body as the final chunk. |
 | cancelBlobUpload <br> `DELETE /v2/<name>/blobs/uploads/<uuid>`    | No   | Cancel outstanding upload processes, releasing associated resources. If this is not called, the unfinished uploads will eventually timeout. |
 | deleteBlob <br> `DELETE /v2/<name>/blobs/<digest>`          | No   | Delete the blob identified by `name` and `digest`. Warning: From the Docker spec I'm not sure that `deleteBlob` doesn't corrupt images if you delete a shared blob. |
 | listRepositories <br> `GET /v2/_catalog/`    | No   | List all repositories in this registry. [Spec.](https://docs.docker.com/registry/spec/api/#listing-repositories) |

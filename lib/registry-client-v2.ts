@@ -25,6 +25,7 @@ import {
 import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
 import * as e from "./errors.ts";
+import { UploadError } from "./errors.ts";
 
 /*
  * Copyright 2017 Joyent, Inc.
@@ -58,15 +59,16 @@ export const MEDIATYPE_MANIFEST_LIST_V2
  * - Else, Basic auth if `username`.
  * - Else, if the authorization key exists, then it is removed from headers.
  */
-function _setAuthHeaderFromAuthInfo(headers: Headers, authInfo: AuthInfo) {
-    if (authInfo.type === 'Bearer') {
+function _setAuthHeaderFromAuthInfo(headers: Headers, authInfo: AuthInfo | null) {
+    if (authInfo?.type === 'Bearer') {
         headers.set('authorization', 'Bearer ' + authInfo.token);
-    } else if (authInfo.type === 'Basic') {
+    } else if (authInfo?.type === 'Basic') {
         const credentials = `${authInfo.username ?? ''}:${authInfo.password ?? ''}`;
         headers.set('authorization', 'Basic ' + btoa(credentials));
     } else {
         headers.delete('authorization');
     }
+    return headers;
 }
 
 /**
@@ -1382,167 +1384,46 @@ export class RegistryClientV2 {
 // };
 
 
-// /*
-//  * Upload a blob. The request stream will be used to
-//  * complete the upload in a single request.
-//  *
-//  * <https://docs.docker.com/registry/spec/api/#starting-an-upload>
-//  *
-//  *   client.blobUpload({digest: <string>, stream: <object>,
-//  *      contentLength: <number>},
-//  *   function (err, res) { });
-//  */
-// blobUpload(opts, cb) {
-//     var this = this;
-//     assert.object(opts, 'opts');
-//     assert.number(opts.contentLength, 'opts.contentLength');
-//     assert.string(opts.digest, 'opts.digest');
-//     assert.object(opts.stream, 'opts.stream');
-//     assert.optionalString(opts.contentType, 'opts.contentType');
-//     assert.optionalObject(opts.log, 'opts.log');
-//     assert.func(cb, 'cb');
+    /*
+    * Upload a blob. The request stream will be used to
+    * complete the upload in a single request.
+    *
+    * <https://docs.docker.com/registry/spec/api/#starting-an-upload>
+    * <https://github.com/opencontainers/distribution-spec/blob/main/spec.md#post-then-put>
+    */
+    async blobUpload(opts: {
+        digest: string;
+        stream: ReadableStream<Uint8Array> | Uint8Array;
+        contentLength: number;
+        contentType?: string;
+    }) {
+        await this.login({
+            scope: _makeAuthScope('repository', this.repo.remoteName!, ['pull', 'push']),
+        });
 
-//     var log = _createLogger(opts.log);
-//     log.trace({
-//         contentLength: opts.contentLength,
-//         digest: opts.digest
-//     }, 'blobUpload');
+        const sessionResponse = await this._api.request({
+            method: 'POST',
+            path: `/v2/${encodeURI(this.repo.remoteName!)}/blobs/uploads/`,
+            headers: _setAuthHeaderFromAuthInfo(new Headers(), this._authInfo ?? null),
+            expectStatus: [202],
+        });
+        const uploadUrl = sessionResponse.headers.get('location');
+        if (!uploadUrl) throw new UploadError(
+            'No registry upload location header returned');
 
-//     // Working variables
-//     var uploadUrl;
-//     // Result variables.
-//     var res;
-
-//     vasync.pipeline({
-//         arg: this,
-//         funcs: [
-//             function doLogin(_, next) {
-//                 log.trace({digest: opts.digest}, 'blobUpload:: doLogin');
-//                 var resource = 'repository';
-//                 var actions = ['pull', 'push'];
-//                 var scope = _makeAuthScope(resource, this.repo.remoteName,
-//                     actions);
-//                 this.login({
-//                     scope: scope
-//                 }, next);
-//             },
-//             function _getUploadUuid(_, next) {
-//                 log.trace({digest: opts.digest}, 'blobUpload:: _getUploadUuid');
-//                 var path = fmt('/v2/%s/blobs/uploads/',
-//                     encodeURI(this.repo.remoteName));
-//                 var headers = {};
-//                 if (this._authInfo) {
-//                     _setAuthHeaderFromAuthInfo(headers, this._authInfo);
-//                 }
-//                 this._api.post({
-//                     path: path,
-//                     headers: headers
-//                 }, function _afterCall(err, req, res_) {
-//                     if (err) {
-//                         next(err);
-//                         return;
-//                     }
-//                     uploadUrl = res_.headers.location;
-//                     if (!uploadUrl) {
-//                         next(new errors.UploadError(
-//                             'No registry upload location header returned'));
-//                         return;
-//                     }
-//                     next();
-//                 });
-//             },
-//             function _putBlob(_, next) {
-//                 assert.string(uploadUrl, 'uploadUrl');
-//                 log.trace({digest: opts.digest}, 'blobUpload:: _putBlob');
-//                 var urlSep = '?';
-//                 if (uploadUrl.indexOf('?') > 0) {
-//                     urlSep = '&';
-//                 }
-//                 var path = fmt('%s%sdigest=%s', uploadUrl, urlSep,
-//                     encodeURIComponent(opts.digest));
-//                 var headers = {
-//                     'content-length': opts.contentLength,
-//                     'content-type': (opts.contentType ||
-//                         'application/octet-stream')
-//                 };
-//                 _setAuthHeaderFromAuthInfo(headers, this._authInfo);
-//                 this._httpapi.put({
-//                     path: path,
-//                     headers: headers
-//                 }, function _afterCall(err, req) {
-//                     log.trace({digest: opts.digest, err: err},
-//                         'blobUpload:: put connected');
-//                     if (err) {
-//                         next(err);
-//                         return;
-//                     }
-//                     // Pipe through the stream data.
-//                     var stream = opts.stream;
-
-//                     function removeListeners() {
-//                         stream.removeListener('error', onStreamPipeError);
-//                         req.removeListener('result', onReqResult);
-//                         req.removeListener('error', onReqError);
-//                     }
-
-//                     req.on('result', onReqResult);
-//                     function onReqResult(reqErr, res_) {
-//                         log.trace({digest: opts.digest},
-//                             'blobUpload:: onResult');
-//                         res = res_;
-//                         if (reqErr) {
-//                             removeListeners();
-//                             registryError(reqErr, res, next);
-//                             return;
-//                         }
-
-//                         var body = '';
-//                         res.on('data', function onResChunk(chunk) {
-//                             body += chunk;
-//                         });
-
-//                         res.on('end', function onResEnd() {
-//                             removeListeners();
-//                             var errMsg = _getRegistryErrMessage(body);
-//                             if (errMsg) {
-//                                 next(new errors.UploadError(errMsg));
-//                                 return;
-//                             }
-//                             next();
-//                         });
-//                     }
-
-//                     req.on('error', onReqError);
-//                     function onReqError(reqErr) {
-//                         log.error({
-//                             digest: opts.digest,
-//                             err: reqErr
-//                         }, 'Error sending blob');
-//                         removeListeners();
-//                         return next(reqErr);
-//                     }
-
-//                     stream.on('error', onStreamPipeError);
-//                     function onStreamPipeError(streamErr) {
-//                         log.error({
-//                             digest: opts.digest,
-//                             err: streamErr
-//                         }, 'Error piping blob');
-//                         removeListeners();
-//                         req.end();
-//                         return next(streamErr);
-//                     }
-
-//                     log.trace({digest: opts.digest},
-//                         'blobUpload:: piping stream to req');
-//                     stream.pipe(req);
-//                 });
-//             }
-//         ]
-//     }, function _blobUploadCb(err) {
-//         cb(err, res);
-//     });
-// };
+        const destinationUrl = new URL(uploadUrl);
+        destinationUrl.searchParams.append('digest', opts.digest);
+        await this._api.request({
+            method: 'PUT',
+            path: destinationUrl.toString(),
+            headers: _setAuthHeaderFromAuthInfo(new Headers({
+                'content-length': `${opts.contentLength}`,
+                'content-type': (opts.contentType || 'application/octet-stream'),
+            }), this._authInfo ?? null),
+            body: opts.stream,
+            expectStatus: [201],
+        });
+    }
 
 }
 

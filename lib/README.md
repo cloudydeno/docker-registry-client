@@ -2,25 +2,17 @@
 
 # Deno `/x/docker_registry_client`
 
-A port of a Docker Registry API V2 client.
+A port / fork of a Docker Registry API V2 client.
+Support for v1 registries has been removed and support for OCI registries has been added.
 
 The [original Node.JS project](https://github.com/joyent/node-docker-registry-client)
-README included these notes:
-
-> Limitations: Currently only support for [...] Registry API v2 *pull* support.
-> Support for v2 push endpoints is coming.
->
-> Note: This repository is part of the Joyent Triton project. See the
-> [contribution guidelines](https://github.com/joyent/triton/blob/master/CONTRIBUTING.md)
-> and general documentation at the main
-> [Triton project](https://github.com/joyent/triton) page.
+supported v1 registries/manifests.
 
 ## Design Points
 
 * Only handling the v2 Registry API.
 * Typescript, async/await, Promises, `fetch()`
-* Focus on image management.
-    For example, listing and deleting tags.
+* Covers most APIs: pull, push, list, delete
 * I'm mostly using gcr.io though there's also some tests against major registries.
 
 ## Auth Approaches
@@ -42,20 +34,20 @@ specific *repository* and calling its methods.
 Simple usage will look like this:
 
 ```typescript
-import { createClient } from 'https://deno.land/x/docker_registry_client/registry-client-v2.ts';
+import { RegistryClientV2 } from 'https://deno.land/x/docker_registry_client/registry-client-v2.ts';
 var REPO = 'alpine';
-var client = createClient({name: REPO});
+var client = new RegistryClientV2({name: REPO});
 
 const tags = await client.listTags();
 console.log(JSON.stringify(tags, null, 4));
 ```
 
-If you need to authenticate, the createClient call might look more like this:
+If you need to authenticate, the `RegistryClientV2` call might look more like this:
 
 ```typescript
-import { createClient } from 'https://deno.land/x/docker_registry_client/registry-client-v2.ts';
+import { RegistryClientV2 } from 'https://deno.land/x/docker_registry_client/registry-client-v2.ts';
 
-var client = createClient({
+var client = new RegistryClientV2({
     name: 'alpine',
     // Optional basic auth to the registry
     username: <username>,

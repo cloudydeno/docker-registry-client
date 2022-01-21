@@ -1,5 +1,20 @@
 # deno-docker_registry_client Changelog
 
+## 0.3.0
+
+- Remove v1 manifest support
+- Replace `await createClient()` with `new RegistryClientV2()`
+- /std@0.120.0
+
+## 0.2.0
+
+- Port putManifest and blobUpload
+- Add some types for OCI artifacts
+
+## 0.1.2
+
+- Deno 1.9 support
+
 ## 0.1.1
 
 - Port headBlob & download blob

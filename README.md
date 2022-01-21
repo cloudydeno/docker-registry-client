@@ -4,33 +4,9 @@
 
 A port of a Docker Registry API V2 client.
 
-The [original Node.JS project](https://github.com/joyent/node-docker-registry-client)
-README included these notes:
+## Usage
 
-> Limitations: Currently only support for [...] Registry API v2 *pull* support.
-> Support for v2 push endpoints is coming.
->
-> Note: This repository is part of the Joyent Triton project. See the
-> [contribution guidelines](https://github.com/joyent/triton/blob/master/CONTRIBUTING.md)
-> and general documentation at the main
-> [Triton project](https://github.com/joyent/triton) page.
-
-## Design Points
-
-* Only handling the v2 Registry API.
-* Typescript, async/await, Promises, `fetch()`
-* Focus on image management.
-    For example, listing and deleting tags.
-* I'm mostly using gcr.io though there's also some tests against major registries.
-
-## Auth Approaches
-
-* Dockerhub: normal user/password
-* Github: `-u $USERNAME -p $GITHUB_TOKEN`
-    * like with Github API, username can likely be anything (haven't confirmed)
-* AWS ECR: `-u AWS -p $(aws ecr get-login-password)`
-    * you need AWS auth even for 'public' images
-* Gcloud GCR: `-u oauth2accesstoken -p $(gcloud auth print-access-token)`
+Check out [the README in lib/](./lib/README.md).
 
 ## Overview
 
@@ -114,11 +90,6 @@ $ ./examples/parseRepoAndRef.ts https://quay.io/trentm/foo
 ```
 
 If a scheme isn't given, then "https" is assumed.
-
-
-## Usage
-
-Check out [the README in lib/](./lib/README.md).
 
 ## v2 API
 

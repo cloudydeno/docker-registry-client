@@ -12,7 +12,7 @@
 
 import { mainline } from "../mainline.ts";
 import { parseRepoAndRef } from "../../lib/common.ts";
-import { createClient } from "../../lib/registry-client-v2.ts";
+import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
 
 // Shared mainline with examples/foo.js to get CLI opts.
 const {opts, args} = mainline({
@@ -26,7 +26,7 @@ if (!name || !(name.includes(':') || name.includes('@'))) {
 
 // The interesting stuff starts here.
 var rar = parseRepoAndRef(name);
-var client = createClient({
+var client = new RegistryClientV2({
     repo: rar,
     // log: log,
     insecure: opts.insecure,

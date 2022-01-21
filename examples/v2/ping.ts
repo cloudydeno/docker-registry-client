@@ -11,7 +11,7 @@
  */
 
 import { mainline } from "../mainline.ts";
-import { createClient } from "../../lib/registry-client-v2.ts";
+import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
 
 // Shared mainline with examples/foo.js to get CLI opts.
 const {opts, args} = mainline({cmd: 'ping'});
@@ -24,7 +24,7 @@ if (opts.help) {
 var indexName = args[0] || 'https://index.docker.io/v1/';
 
 // The interesting stuff starts here.
-const client = createClient({
+const client = new RegistryClientV2({
     name: indexName,
     // username: opts.username,
     // password: opts.password,

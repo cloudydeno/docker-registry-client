@@ -57,7 +57,7 @@ mainline({cmd: cmd}, function (log, parser, opts, args) {
     var fileSize = fs.statSync(filepath).size;
 
     getFileSha256(filepath, function (err, sha256) {
-        var client = drc.createClientV2({
+        var client = drc.RegistryClientV2V2({
             insecure: opts.insecure,
             log: log,
             repo: rar,

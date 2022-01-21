@@ -12,17 +12,18 @@ export * from './types.ts';
 
 export {
     RegistryClientV2,
-    createClient,
     digestFromManifestStr,
+} from "./registry-client-v2.ts";
+
+export {
     MEDIATYPE_MANIFEST_V2,
     MEDIATYPE_MANIFEST_LIST_V2,
     MEDIATYPE_OCI_MANIFEST_V1,
     MEDIATYPE_OCI_MANIFEST_INDEX_V1,
-} from "./registry-client-v2.ts";
 
-export {
     DEFAULT_INDEX_NAME,
     DEFAULT_TAG,
+
     parseRepo,
     parseIndex,
     parseRepoAndRef,

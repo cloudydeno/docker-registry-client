@@ -33,7 +33,7 @@
 /* END JSSTYLED */
 
 import { mainline } from "../mainline.ts";
-import { createClient } from "../../lib/registry-client-v2.ts";
+import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
 
 
 // --- globals
@@ -46,7 +46,7 @@ var indexName = args[0] || 'https://index.docker.io/v1/';
 var username = opts.username || prompt('Username:')?.trim();
 var password = opts.password || prompt('Password:')?.trim();
 
-const client = createClient({
+const client = new RegistryClientV2({
     name: indexName,
     // auth info:
     username: username,

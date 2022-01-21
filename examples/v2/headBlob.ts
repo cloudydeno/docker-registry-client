@@ -12,7 +12,7 @@
 
 import { mainline } from "../mainline.ts";
 import { parseRepoAndRef } from "../../lib/common.ts";
-import { createClient } from "../../lib/registry-client-v2.ts";
+import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
 
 // Shared mainline with examples/foo.js to get CLI opts.
 const {opts, args} = mainline({cmd: 'headBlob'});
@@ -26,7 +26,7 @@ if (!name) {
 // The interesting stuff starts here.
 var rat = parseRepoAndRef(name);
 if (!rat.digest) throw new Error('must specify a @DIGEST');
-var client = createClient({
+var client = new RegistryClientV2({
     repo: rat,
     insecure: opts.insecure,
     username: opts.username,

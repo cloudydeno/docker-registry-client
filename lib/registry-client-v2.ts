@@ -7,20 +7,22 @@
 import { Sha256 } from "https://deno.land/std@0.105.0/hash/sha256.ts";
 
 import {
-    parseIndex, parseRepo,
+    parseRepo,
     isLocalhost,
     urlFromIndex,
     DEFAULT_USERAGENT,
     splitIntoTwo,
+    MEDIATYPE_MANIFEST_V2,
+    MEDIATYPE_MANIFEST_LIST_V2,
+    MEDIATYPE_OCI_MANIFEST_V1,
+    MEDIATYPE_OCI_MANIFEST_INDEX_V1,
 } from "./common.ts";
 import {
     Manifest,
-    RegistryIndex, RegistryImage,
+    RegistryImage,
     RegistryClientOpts,
     AuthInfo,
     TagList,
-    ManifestOCIIndex,
-    ManifestOCI,
 } from "./types.ts";
 import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
@@ -30,27 +32,9 @@ import * as e from "./errors.ts";
  * Copyright 2017 Joyent, Inc.
  */
 
-/*
- * Docker Registry API v2 client. See the README for an intro.
- *
- * <https://docs.docker.com/registry/spec/api/>
- */
-
-// --- Globals
-
 // https://github.com/docker/docker/blob/77da5d8/registry/config_unix.go#L10
 const DEFAULT_V2_REGISTRY = 'https://registry-1.docker.io';
 const MAX_REGISTRY_ERROR_LENGTH = 10000;
-
-export const MEDIATYPE_MANIFEST_V2
-    = 'application/vnd.docker.distribution.manifest.v2+json';
-export const MEDIATYPE_MANIFEST_LIST_V2
-    = 'application/vnd.docker.distribution.manifest.list.v2+json';
-
-export const MEDIATYPE_OCI_MANIFEST_V1
-    = 'application/vnd.oci.image.manifest.v1+json';
-export const MEDIATYPE_OCI_MANIFEST_INDEX_V1
-    = 'application/vnd.oci.image.index.v1+json';
 
 /*
  * Set the "Authorization" HTTP header into the headers object from the given
@@ -425,11 +409,6 @@ export class RegistryClientV2 {
      *
      * Typically one does not need to call this function directly because most
      * methods of a `RegistryClientV2` will automatically login as necessary.
-     * Once exception is the `ping` method, which intentionally does not login.
-     * That is because the point of the ping is to determine quickly if the
-     * registry supports v2, which doesn't require the extra work of logging in.
-     *
-     * This attempts to reproduce the logic of "docker.git:registry/auth.go#loginV2"
      *
      * @param opts {Object}
      *      - opts.scope {String} Optional. A scope string passed in for
@@ -531,14 +510,9 @@ export class RegistryClientV2 {
         }
         // log.trace({tokenUrl: tokenUrl}, '_getToken: url');
 
-        var parsedUrl = new URL(tokenUrl);
-        var client = new DockerJsonClient({
-            url: parsedUrl.origin,
-            ...this._commonHttpClientOpts,
-        });
-        const resp = await client.request({
+        const resp = await this._api.request({
             method: 'GET',
-            path: parsedUrl.href.slice(parsedUrl.origin.length),
+            path: tokenUrl,
             headers: headers,
             expectStatus: [200, 401],
         });
@@ -563,13 +537,6 @@ export class RegistryClientV2 {
      *
      * Typically one does not need to call this method directly because most
      * methods of a client will automatically login as necessary.
-     * Once exception is the `ping` method, which intentionally does not login.
-     * That is because the point of the ping is to determine quickly if the
-     * registry supports v2, which doesn't require the extra work of logging in.
-     * See <https://github.com/joyent/node-docker-registry-client/pull/6> for
-     * an example of the latter.
-     *
-     * This attempts to reproduce the logic of "docker.git:registry/auth.go#loginV2"
      *
      * @param opts {Object} Optional.
      *      - opts.pingRes {Object} Optional. The response object from an earlier
@@ -604,12 +571,6 @@ export class RegistryClientV2 {
     /**
      * Determine if this registry supports the v2 API.
      * https://docs.docker.com/registry/spec/api/#api-version-check
-     *
-     * Note that, at least, currently we are presuming things are fine with a 401.
-     * I.e. defering auth to later calls.
-     *
-     * @param cb {Function} `function (err, supportsV2)`
-     *      where `supportsV2` is a boolean indicating if V2 API is supported.
      */
     async supportsV2() {
         let res;
@@ -622,10 +583,6 @@ export class RegistryClientV2 {
 
         var header = res.headers.get('docker-distribution-api-version');
         if (header) {
-            /*
-                * Space- or comma-separated. The latter occurs if there are
-                * two separate headers.
-                */
             var versions = header.split(/[\s,]+/g);
             if (versions.includes('registry/2.0')) {
                 return true;
@@ -634,7 +591,7 @@ export class RegistryClientV2 {
         return [200, 401].includes(res.status);
     };
 
-
+    // TODO: pagination of some kind
     async listTags(): Promise<TagList> {
         await this.login();
         const res = await this._api.request({
@@ -650,12 +607,8 @@ export class RegistryClientV2 {
     * Get an image manifest. `ref` is either a tag or a digest.
     * <https://docs.docker.com/registry/spec/api/#pulling-an-image-manifest>
     *
-    *   client.getManifest({ref: <tag or digest>}, function (err, manifest, res,
-    *      manifestStr) {
-    *      // Use `manifest` and digest is `res.headers['docker-content-digest']`.
-    *      // Note that docker-content-digest header can be undefined, so if you
-    *      // need a manifest digest, use the `digestFromManifestStr` function.
-    *   });
+    * Note that docker-content-digest header can be undefined, so if you
+    * need a manifest digest, use the `digestFromManifestStr` function.
     */
     async getManifest(opts: {
         ref: string;
@@ -694,28 +647,12 @@ export class RegistryClientV2 {
         }
 
         const manifest: Manifest = await resp.dockerJson();
-
         if (manifest.schemaVersion as number === 1) {
             throw new Error(`schemaVersion 1 is not supported by /x/docker_registry_client.`);
         }
 
-        // Verify the manifest contents.
-        var layers: Array<unknown> | undefined;
-        const mediaType = manifest.mediaType || resp.headers.get('content-type');
-        if (mediaType === MEDIATYPE_MANIFEST_LIST_V2
-                || mediaType === MEDIATYPE_OCI_MANIFEST_INDEX_V1) {
-            layers = (manifest as ManifestOCIIndex).manifests;
-        } else {
-            layers = (manifest as ManifestOCI).layers;
-        }
-        if (!layers || layers.length === 0) {
-            throw new e.InvalidContentError(
-                `no layers or manifests in ${this.repo.localName}:${opts.ref} manifest`);
-        }
-
         return {resp, manifest};
     };
-
 
     async deleteManifest(opts: {
         ref: string;
@@ -730,7 +667,6 @@ export class RegistryClientV2 {
         await resp.dockerJson(); // GCR gives { errors: [] }
     };
 
-
     /**
      * Makes a http request to the given url, following any redirects, then fires
      * the callback(err, req, responses) with the result.
@@ -742,7 +678,6 @@ export class RegistryClientV2 {
     async _makeHttpRequest(opts: {
         method: string;
         path: string;
-        // url: string;
         headers?: Headers,
         followRedirects?: boolean;
         maxRedirects?: number;
@@ -751,7 +686,6 @@ export class RegistryClientV2 {
         const maxRedirects = opts.maxRedirects ?? 3;
         let numRedirs = 0;
         let req = {
-            client: this._api,
             path: opts.path,
             headers: opts.headers,
         };
@@ -760,8 +694,9 @@ export class RegistryClientV2 {
         while (numRedirs < maxRedirects) {
             numRedirs += 1;
 
-            req.client.accept = ''; // TODO: do better
-            const resp = await req.client.request({
+            const client = this._api;
+            client.accept = ''; // TODO: do better
+            const resp = await client.request({
                 method: opts.method,
                 path: req.path,
                 headers: req.headers,
@@ -776,37 +711,27 @@ export class RegistryClientV2 {
             const location = resp.headers.get('location');
             if (!location) return ress;
 
-            const loc = new URL(location, new URL(req.path, req.client.url));
+            const loc = new URL(location, new URL(req.path, this._url));
             // this.log.trace({numRedirs: numRedirs, loc: loc}, 'got redir response');
             req = {
-                client: new DockerJsonClient({
-                    url: loc.origin,
-                    ...this._commonHttpClientOpts,
-                }),
-                path: loc.href.slice(loc.origin.length),
+                path: loc.toString(),
                 headers: new Headers,
             };
 
-            // consume the redirect's body since probably no one else will
-            await resp.dockerBody();
+            await resp.body?.cancel();
         }
 
         throw new e.TooManyRedirectsError(`maximum number of redirects (${maxRedirects}) hit`);
     };
 
-
-    async _headOrGetBlob(opts: {
-        method: string;
-        digest: string;
-    }) {
+    async _headOrGetBlob(method: 'GET' | 'HEAD', digest: string) {
         await this.login();
         return await this._makeHttpRequest({
-            method: opts.method,
-            path: `/v2/${encodeURI(this.repo.remoteName ?? '')}/blobs/${encodeURI(opts.digest)}`,
+            method: method,
+            path: `/v2/${encodeURI(this.repo.remoteName ?? '')}/blobs/${encodeURI(digest)}`,
             headers: this._headers,
         });
     };
-
 
     /*
     * Get an image file blob -- just the headers. See `getBlob`.
@@ -814,39 +739,8 @@ export class RegistryClientV2 {
     * <https://docs.docker.com/registry/spec/api/#get-blob>
     * <https://docs.docker.com/registry/spec/api/#pulling-an-image-manifest>
     *
-    * This endpoint can return 3xx redirects. An example first hit to Docker Hub
-    * yields this response
-    *
-    *      HTTP/1.1 307 Temporary Redirect
-    *      docker-content-digest: sha256:b15fbeba7181d178e366a5d8e0...
-    *      docker-distribution-api-version: registry/2.0
-    *      location: https://dseasb33srnrn.cloudfront.net/registry-v2/...
-    *      date: Mon, 01 Jun 2015 23:43:55 GMT
-    *      content-type: text/plain; charset=utf-8
-    *      connection: close
-    *      strict-transport-security: max-age=3153600
-    *
-    * And after resolving redirects, this:
-    *
-    *      HTTP/1.1 200 OK
-    *      Content-Type: application/octet-stream
-    *      Content-Length: 2471839
-    *      Connection: keep-alive
-    *      Date: Mon, 01 Jun 2015 20:23:43 GMT
-    *      Last-Modified: Thu, 28 May 2015 23:02:16 GMT
-    *      ETag: "f01c599df7404875a0c1740266e74510"
-    *      Accept-Ranges: bytes
-    *      Server: AmazonS3
-    *      Age: 11645
-    *      X-Cache: Hit from cloudfront
-    *      Via: 1.1 e3799a12d0e2fdaad3586ff902aa529f.cloudfront.net (CloudFront)
-    *      X-Amz-Cf-Id: 8EUekYdb8qGK48Xm0kmiYi1GaLFHbcv5L8fZPOUWWuB5zQfr72Qdfg==
-    *
-    * A client will typically want to follow redirects, so by default we
-    * follow redirects and return a responses. If needed a `opts.noFollow=true`
-    * could be implemented.
-    *
-    *      cb(err, ress)   // `ress` is the plural of `res` for "response"
+    * This endpoint can return 3xx redirects. The first response often redirects
+    * to an object CDN, which would then return the raw data.
     *
     * Interesting headers:
     * - `ress[0].headers['docker-content-digest']` is the digest of the
@@ -857,12 +751,9 @@ export class RegistryClientV2 {
     async headBlob(opts: {
         digest: string;
     }) {
-        const resp = await this._headOrGetBlob({
-            method: 'HEAD',
-            digest: opts.digest
-        });
+        const resp = await this._headOrGetBlob('HEAD', opts.digest);
         // consume the final body - since HEADs don't have meaningful bodies
-        await resp.slice(-1)[0].arrayBuffer();
+        await resp.slice(-1)[0].body?.cancel();
         return resp;
     };
 
@@ -871,33 +762,6 @@ export class RegistryClientV2 {
      * Get a ReadableStream to the given blob.
      * <https://docs.docker.com/registry/spec/api/#get-blob>
      *
-     * Possible usage:
-     *
-     *      const {stream} = await client.createBlobReadStream({digest: DIGEST});
-     *      const file = await Deno.create(`/var/tmp/blob-${DIGEST}.file`);
-     *      for await (const chunk of stream) {
-     *          await Deno.writeAll(chunk, myFile);
-     *      }
-     *      file.close();
-     *      console.log('Done downloading blob', DIGEST);
-
-     *
-     * See "examples/v2/downloadBlob.ts" for a more complete example.
-     * This stream will verify 'Docker-Content-Digest' and 'Content-Length'
-     * response headers, calling back with `BadDigestError` if they don't verify.
-     *
-     * Note: While the spec says the registry response will include the
-     * Docker-Content-Digest and Content-Length headers, there is a suggestion that
-     * this was added to the spec in rev "a", see
-     * <https://docs.docker.com/registry/spec/api/#changes>. Also, if I read it
-     * correctly, it looks like Docker's own registry client code doesn't
-     * require those headers:
-     *     // JSSTYLED
-     *     https://github.com/docker/distribution/blob/master/registry/client/repository.go#L220
-     * So this implementation won't require them either.
-     *
-     * @param opts {Object}
-     *      - digest {String}
      * @return
      *      The `stream` is a W3C ReadableStream.
      *      `ress` (plural of 'res') is an array of responses
@@ -909,10 +773,7 @@ export class RegistryClientV2 {
     async createBlobReadStream(opts: {
         digest: string;
     }) {
-        const ress = await this._headOrGetBlob({
-            method: 'GET',
-            digest: opts.digest,
-        });
+        const ress = await this._headOrGetBlob('GET', opts.digest);
         let stream = ress[ress.length - 1].dockerStream();
 
         var dcdHeader = ress[0].headers.get('docker-content-digest');
@@ -932,16 +793,9 @@ export class RegistryClientV2 {
         return { ress, stream };
     };
 
-
     /*
     * Upload an image manifest. `ref` is either a tag or a digest.
-    * <https://docs.docker.com/registry/spec/api/#pushing-an-image>
     * <https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pushing-manifests>
-    *
-    *   client.putManifest({manifest: <string>, ref: <tag or digest>},
-    *   function (err, res, digest, location) {
-    *      // Digest is `res.headers['docker-content-digest']`.
-    *   });
     */
     async putManifest(opts: {
         manifestData: Uint8Array;
@@ -971,12 +825,8 @@ export class RegistryClientV2 {
         return { digest, location };
     };
 
-
     /*
-    * Upload a blob. The request stream will be used to
-    * complete the upload in a single request.
-    *
-    * <https://docs.docker.com/registry/spec/api/#starting-an-upload>
+    * Upload a blob. The request stream will be used to  complete the upload in a single request.
     * <https://github.com/opencontainers/distribution-spec/blob/main/spec.md#post-then-put>
     */
     async blobUpload(opts: {
@@ -1013,8 +863,4 @@ export class RegistryClientV2 {
         }).catch(cause => Promise.reject(new e.UploadError("Blob upload failed.", {cause})));
     }
 
-}
-
-export function createClient(opts: RegistryClientOpts) {
-    return new RegistryClientV2(opts);
 }

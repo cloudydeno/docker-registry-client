@@ -7,7 +7,7 @@
  */
 
 import { mainline } from "../mainline.ts";
-import { createClient } from "../../lib/registry-client-v2.ts";
+import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
 
 /*
  * Copyright (c) 2015, Joyent, Inc.
@@ -24,7 +24,7 @@ if (!name) {
 
 
 // The interesting stuff starts here.
-var client = createClient({
+var client = new RegistryClientV2({
     name: name,
     insecure: opts.insecure,
     username: opts.username,

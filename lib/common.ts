@@ -6,6 +6,16 @@
 
 import { RegistryImage, RegistryIndex } from "./types.ts";
 
+export const MEDIATYPE_MANIFEST_V2
+    = 'application/vnd.docker.distribution.manifest.v2+json';
+export const MEDIATYPE_MANIFEST_LIST_V2
+    = 'application/vnd.docker.distribution.manifest.list.v2+json';
+
+export const MEDIATYPE_OCI_MANIFEST_V1
+    = 'application/vnd.oci.image.manifest.v1+json';
+export const MEDIATYPE_OCI_MANIFEST_INDEX_V1
+    = 'application/vnd.oci.image.index.v1+json';
+
 /*
  * Copyright 2016 Joyent, Inc.
  */

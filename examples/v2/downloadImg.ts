@@ -19,7 +19,7 @@ import { MultiProgressBar } from "https://deno.land/x/progress@v1.2.3/mod.ts";
 
 import { mainline } from "../mainline.ts";
 import { parseRepoAndRef } from "../../lib/common.ts";
-import { createClient } from "../../lib/registry-client-v2.ts";
+import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
 import { Manifest } from "../../lib/types.ts";
 
 // Shared mainline with examples/foo.js to get CLI opts.
@@ -34,7 +34,7 @@ if (!args[0] || (args[0].indexOf(':') === -1 && !args[1])) {
 // The interesting stuff starts here.
 const rar = parseRepoAndRef(args[0]);
 console.log('Repo:', rar.canonicalName);
-const client = createClient({
+const client = new RegistryClientV2({
     repo: rar,
     insecure: opts.insecure,
     username: opts.username,

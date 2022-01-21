@@ -18,7 +18,7 @@
 // var format = require('util').format;
 // var read = require('read');
 
-import { parse } from "https://deno.land/std@0.105.0/flags/mod.ts";
+import { parse } from "https://deno.land/std@0.120.0/flags/mod.ts";
 
 export interface CliOption {
     names: string[];

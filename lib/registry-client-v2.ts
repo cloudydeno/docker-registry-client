@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import { Sha256 } from "https://deno.land/std@0.105.0/hash/sha256.ts";
+import { Sha256 } from "https://deno.land/std@0.120.0/hash/sha256.ts";
 
 import {
     parseRepo,

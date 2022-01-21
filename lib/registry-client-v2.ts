@@ -5,7 +5,6 @@
  */
 
 import { Sha256 } from "https://deno.land/std@0.105.0/hash/sha256.ts";
-import * as Base64url from "https://deno.land/std@0.105.0/encoding/base64url.ts";
 
 import {
     parseIndex, parseRepo,
@@ -20,7 +19,6 @@ import {
     RegistryClientOpts,
     AuthInfo,
     TagList,
-    ManifestV1,
     ManifestOCIIndex,
     ManifestOCI,
 } from "./types.ts";
@@ -37,9 +35,6 @@ import * as e from "./errors.ts";
  *
  * <https://docs.docker.com/registry/spec/api/>
  */
-
-// var jwkToPem = require('jwk-to-pem');
-// var mod_jws = require('jws');
 
 // --- Globals
 
@@ -235,231 +230,6 @@ function _parseWWWAuthenticate(header: string) {
     return parsed;
 }
 
-
-/* BEGIN JSSTYLED */
-/*
- * Parse out a JWS (JSON Web Signature) from the given Docker manifest
- * endpoint response. This JWS is used for both 'Docker-Content-Digest' header
- * verification and JWS signing verification.
- *
- * This mimicks:
- *      func ParsePrettySignature(content []byte, signatureKey string)
- *          (*JSONSignature, error)
- * in "docker/vendor/src/github.com/docker/libtrust/jsonsign.go"
- *
- * @returns {Object} JWS object with 'payload' and 'signatures' fields.
- * @throws {InvalidContentError} if there is a problem parsing the manifest
- *      body.
- *
- *
- * # Design
- *
- * tl;dr: Per <https://docs.docker.com/registry/spec/api/#digest-header>
- * the payload used for the digest is a little obtuse for the getManifest
- * endpoint: It is the raw JSON body (the raw content because indentation
- * and key order matters) minus the "signatures" key. The "signatures"
- * key is always the last one. The byte offset at which to strip and a
- * suffix to append is included in the JWS "protected" header.
- *
- *
- * A longer explanation:
- *
- * Let's use the following (clipped for clarity) sample getManifest
- * request/response to a Docker v2 Registry API (in this case Docker Hub):
- *
- *     GET /v2/library/alpine/manifests/latest HTTP/1.1
- *     ...
- *
- *     HTTP/1.1 200 OK
- *     docker-content-digest: sha256:08a98db12e...fe0d
- *     ...
- *
- *     {
- *         "schemaVersion": 1,
- *         "name": "library/alpine",
- *         "tag": "latest",
- *         "architecture": "amd64",
- *         "fsLayers": [
- *             {
- *                 "blobSum": "sha256:c862d82a67...d58"
- *             }
- *         ],
- *         "history": [
- *             {
- *                 "v1Compatibility": "{\"id\":\"31f6...4492}\n"
- *             }
- *         ],
- *         "signatures": [
- *             {
- *                 "header": {
- *                     "jwk": {
- *                         "crv": "P-256",
- *                         "kid": "OIH7:HQFS:44FK:45VB:3B53:OIAG:TPL4:ATF5:6PNE:MGHN:NHQX:2GE4",
- *                         "kty": "EC",
- *                         "x": "Cu_UyxwLgHzE9rvlYSmvVdqYCXY42E9eNhBb0xNv0SQ",
- *                         "y": "zUsjWJkeKQ5tv7S-hl1Tg71cd-CqnrtiiLxSi6N_yc8"
- *                     },
- *                     "alg": "ES256"
- *                 },
- *                 "signature": "JV1F_gXAsUEp_e2WswSdHjvI0veC-f6EEYuYJZhgIPpN-LQ5-IBSOX7Ayq1gv1m2cjqPy3iXYc2HeYgCQTxM-Q",
- *                 "protected": "eyJmb3JtYXRMZW5ndGgiOjE2NzUsImZvcm1hdFRhaWwiOiJDbjAiLCJ0aW1lIjoiMjAxNS0wOS0xMFQyMzoyODowNloifQ"
- *             }
- *         ]
- *     }
- *
- *
- * We will be talking about specs from the IETF JavaScript Object Signing
- * and Encryption (JOSE) working group
- * <https://datatracker.ietf.org/wg/jose/documents/>. The relevant ones
- * with Docker registry v2 (a.k.a. docker/distribution) are:
- *
- * 1. JSON Web Signature (JWS): https://tools.ietf.org/html/rfc7515
- * 2. JSON Web Key (JWK): https://tools.ietf.org/html/rfc7517
- *
- *
- * Docker calls the "signatures" value the "JWS", a JSON Web Signature.
- * That's mostly accurate. A JWS, using the JSON serialization that
- * Docker is using, looks like:
- *
- *      {
- *          "payload": "<base64url-encoded payload bytes>",
- *          "signatures": [
- *              {
- *                  "signature": "<base64url-encoded signature>",
- *                  // One or both of "protected" and "header" must be
- *                  // included, and an "alg" key (the signing algoritm)
- *                  // must be in one of them.
- *                  "protected": "<base64url-encoded header key/value pairs
- *                      included in the signature>",
- *                  "header": {
- *                      <key/value pairs *not* included in the signature>
- *                   }
- *              }
- *          ]
- *      }
- *
- * (I'm eliding some details: If there is only one signature, then the
- * signature/protected/et al fields can be raised to the top-level. There
- * is a "compact" serialization that we don't need to worry about,
- * other than most node.js JWS modules don't directly support the JSON
- * serialization. There are other optional signature fields.)
- *
- * I said "mostly accurate", because the "payload" is missing. Docker
- * flips the JWS inside out, so that the "signatures" are include *in
- * the payload*. The "protected" header provides some data needed to
- * tease the signing payload out of the HTTP response body. Using our
- * example:
- *
- *      $ echo eyJmb3JtYXRMZW5ndGgiOjE2NzUsImZvcm1hdFRhaWwiOiJDbjAiLCJ0aW1lIjoiMjAxNS0wOS0xMFQyMzoyODowNloifQ | ./node_modules/.bin/base64url --decode
- *      {"formatLength":1675,"formatTail":"Cn0","time":"2015-09-10T23:28:06Z"}
- *
- * Here "formatLength" is a byte count into the response body to extract
- * and "formatTail" is a base64url-encoded suffix to append to that. In
- * practice the "formatLength" is up to comma before the "signatures" key
- * and "formatLength" is:
- *
- *      > base64url.decode('Cn0')
- *      '\n}'
- *
- * Meaning the signing payload is typically the equivalent of
- * `delete body["signatures"]`:
- *
- *      {
- *         "schemaVersion": 1,
- *         "name": "library/alpine",
- *         "tag": "latest",
- *         "architecture": "amd64",
- *         "fsLayers": ...,
- *         "history": ...
- *      }
- *
- * However, whitespace is significant because we are just signing bytes,
- * so the raw response body must be manipulated. An odd factoid is that
- * docker/libtrust seems to default to 3-space indentation:
- * <https://github.com/docker/libtrust/blob/9cbd2a1374f46905c68a4eb3694a130610adc62a/jsonsign.go#L450>
- * Perhaps to avoid people getting lucky.
- *
- */
-/* END JSSTYLED */
-function _jwsFromManifest(manifest: ManifestV1, body: Uint8Array) {
-    var formatLength;
-    var formatTail;
-    var jws = {
-        payload: new Uint8Array(),
-        signatures: new Array<{
-            header: {
-                alg: any;
-                chain: any;
-            };
-            signature: string;
-            protected: string;
-        }>(),
-    };
-
-    for (var i = 0; i < manifest.signatures!.length; i++) {
-        var sig = manifest.signatures![i];
-
-        try {
-            var protectedHeader = JSON.parse(
-                new TextDecoder().decode(Base64url.decode(sig['protected'])));
-        } catch (protectedErr) {
-            throw new e.InvalidContentError(
-                `could not parse manifest "signatures[${i}].protected": ${sig['protected']}: ${protectedErr.message}`);
-        }
-        if (isNaN(protectedHeader.formatLength)) {
-            throw new e.InvalidContentError(
-                `invalid "formatLength" in "signatures[${i}].protected": ${protectedHeader.formatLength}`);
-        } else if (formatLength === undefined) {
-            formatLength = protectedHeader.formatLength;
-        } else if (protectedHeader.formatLength !== formatLength) {
-            throw new e.InvalidContentError(
-                `conflicting "formatLength" in "signatures[${i}].protected": ${protectedHeader.formatLength}`);
-        }
-
-        if (!protectedHeader.formatTail ||
-            typeof (protectedHeader.formatTail) !== 'string')
-        {
-            throw new e.InvalidContentError(
-                `missing "formatTail" in "signatures[${i}].protected"`);
-        }
-        var formatTail_ = new TextDecoder().decode(Base64url.decode(protectedHeader.formatTail));
-        if (formatTail === undefined) {
-            formatTail = formatTail_;
-        } else if (formatTail_ !== formatTail) {
-            throw new e.InvalidContentError(
-                `conflicting "formatTail" in "signatures[${i}].protected": ${formatTail_}`);
-        }
-
-        var jwsSig = {
-            header: {
-                alg: sig.header.alg,
-                chain: sig.header.chain,
-                jwk: sig.header.jwk,
-            },
-            signature: sig.signature,
-            'protected': sig['protected'],
-        };
-        // if (sig.header.jwk) {
-        //     try {
-        //         jwsSig.header.jwk = jwkToPem(sig.header.jwk);
-        //     } catch (jwkErr) {
-        //         throw new e.InvalidContentError(
-        //             `error in "signatures[${i}].header.jwk": ${jwkErr.message}`);
-        //     }
-        // }
-        jws.signatures.push(jwsSig);
-    }
-
-    const tail = new TextEncoder().encode(formatTail);
-    const buf = new Uint8Array(formatLength + tail.byteLength);
-    buf.set(body.subarray(0, formatLength), 0);
-    buf.set(tail, formatLength);
-    jws.payload = buf;
-
-    return jws;
-}
-
-
 /*
  * Parse the 'Docker-Content-Digest' header.
  *
@@ -502,82 +272,6 @@ function _parseDockerContentDigest(dcd: string) {
     };
 }
 
-/*
- * Verify the 'Docker-Content-Digest' header for a getManifest response.
- *
- * @throws {BadDigestError} if the digest doesn't check out.
- */
-function _verifyManifestDockerContentDigest(res: Response, jws: {payload: Uint8Array}) {
-    var dcdInfo = _parseDockerContentDigest(
-        res.headers.get('docker-content-digest') ?? '');
-
-    const hash = dcdInfo.startHash();
-    hash.update(jws.payload);
-    var digest = hash.hex();
-    if (dcdInfo.expectedDigest !== digest) {
-        // res.log.trace({expectedDigest: dcdInfo.expectedDigest,
-        //     header: dcdInfo.raw, digest: digest},
-        //     'Docker-Content-Digest failure');
-        throw new e.BadDigestError(`Docker-Content-Digest (${dcdInfo.expectedDigest} vs ${digest})`);
-    }
-}
-
-
-// /*
-//  * Verify a manifest JWS (JSON Web Signature)
-//  *
-//  * This mimicks
-//  *      func Verify(sm *SignedManifest) ([]libtrust.PublicKey, error)
-//  * in "docker/vendor/src/github.com/docker/distribution/manifest/verify.go"
-//  * which calls
-//  *      func (js *JSONSignature) Verify() ([]PublicKey, error)
-//  * in "docker/vendor/src/github.com/docker/libtrust/jsonsign.go"
-//  *
-//  * TODO: find an example with `signatures.*.header.chain` to test that path
-//  *
-//  * @param jws {Object} A JWS object parsed from `_jwsFromManifest`.
-//  * @throws {errors.ManifestVerificationError} if there is a problem.
-//  */
-// function _verifyJws(jws) {
-//     var encodedPayload = base64url(jws.payload);
-
-//     /*
-//      * Disallow the "none" algorithm because while the `jws` module might have
-//      * a guard against
-//      *      // JSSTYLED
-//      *      https://auth0.com/blog/2015/03/31/critical-vulnerabilities-in-json-web-token-libraries/
-//      * why bother allowing it?
-//      */
-//     var disallowedAlgs = ['none'];
-
-//     for (var i = 0; i < jws.signatures.length; i++) {
-//         var jwsSig = jws.signatures[i];
-//         var alg = jwsSig.header.alg;
-//         if (disallowedAlgs.indexOf(alg) !== -1) {
-//             throw new errors.ManifestVerificationError(
-//                 {jws: jws, i: i}, 'disallowed JWS signature algorithm:', alg);
-//         }
-
-//         // TODO: Find Docker manifest example using 'header.chain'
-//         // and implement this. See "jsonsign.go#Verify".
-//         if (jwsSig.header.chain) {
-//             throw new errors.InternalError({jws: jws, i: i},
-//                 'JWS verification with a cert "chain" is not implemented: %j',
-//                 jwsSig.header.chain);
-//         }
-
-//         // `mod_jws.verify` takes the JWS compact representation.
-//         var jwsCompact = jwsSig['protected'] + '.' + encodedPayload +
-//             '.' + jwsSig.signature;
-//         var verified = mod_jws.verify(jwsCompact, alg, jwsSig.header.jwk);
-//         if (!verified) {
-//             throw new errors.ManifestVerificationError(
-//                 {jws: jws, i: i}, 'JWS signature %d failed verification', i);
-//         }
-//     }
-// }
-
-
 /**
  * Calculate the 'Docker-Content-Digest' header for the given manifest.
  *
@@ -595,18 +289,7 @@ export function digestFromManifestStr(manifestStr: string): string {
         throw new Error(`could not parse manifest: ${err.message}\n${manifestStr}`);
     }
     if (manifest.schemaVersion === 1) {
-        try {
-            var manifestBuffer = new TextEncoder().encode(manifestStr);
-            var jws = _jwsFromManifest(manifest, manifestBuffer);
-            hash.update(jws.payload);
-            return digestPrefix + hash.hex();
-        } catch (verifyErr) {
-            if (!(verifyErr instanceof e.InvalidContentError)) {
-                throw verifyErr;
-            }
-            // Couldn't parse (or doesn't have) the signatures section,
-            // fall through.
-        }
+        throw new Error(`schemaVersion 1 is not supported by /x/docker_registry_client.`);
     }
     hash.update(manifestStr);
     return digestPrefix + hash.hex();
@@ -619,7 +302,6 @@ export class RegistryClientV2 {
     repo: RegistryImage;
     acceptOCIManifests: boolean;
     acceptManifestLists: boolean;
-    maxSchemaVersion: number;
     username?: string;
     password?: string;
     scopes: string[];
@@ -664,7 +346,6 @@ export class RegistryClientV2 {
 
         this.acceptOCIManifests = opts.acceptOCIManifests || false;
         this.acceptManifestLists = opts.acceptManifestLists || false;
-        this.maxSchemaVersion = opts.maxSchemaVersion || (this.acceptOCIManifests ? 2 : 1);
         this.username = opts.username;
         this.password = opts.password;
         this.scopes = opts.scopes ?? ['pull'];
@@ -980,33 +661,24 @@ export class RegistryClientV2 {
         ref: string;
         acceptManifestLists?: boolean;
         acceptOCIManifests?: boolean;
-        maxSchemaVersion?: number;
         followRedirects?: boolean;
     }) {
         var acceptOCIManifests = opts.acceptOCIManifests
             ?? this.acceptOCIManifests;
         var acceptManifestLists = opts.acceptManifestLists
             ?? this.acceptManifestLists;
-        var maxSchemaVersion = opts.maxSchemaVersion
-            ?? this.maxSchemaVersion;
 
         await this.login();
         var headers = new Headers(this._headers);
-        if (maxSchemaVersion === 2) {
-            const accept = this._headers.get('accept')?.split(', ') ?? [];
-            accept.push(MEDIATYPE_MANIFEST_V2);
-            if (acceptManifestLists) {
-                accept.push(MEDIATYPE_MANIFEST_LIST_V2);
-            }
-            headers.set('accept', accept.join(', '));
+        headers.append('accept', MEDIATYPE_MANIFEST_V2);
+        if (acceptManifestLists) {
+            headers.append('accept', MEDIATYPE_MANIFEST_LIST_V2);
         }
         if (acceptOCIManifests) {
-            const accept = this._headers.get('accept')?.split(', ') ?? [];
-            accept.push(MEDIATYPE_OCI_MANIFEST_V1);
+            headers.append('accept', MEDIATYPE_OCI_MANIFEST_V1);
             if (acceptManifestLists) {
-                accept.push(MEDIATYPE_OCI_MANIFEST_INDEX_V1);
+                headers.append('accept', MEDIATYPE_OCI_MANIFEST_INDEX_V1);
             }
-            headers.set('accept', accept.join(', '));
         }
 
         const resp = await this._api.request({
@@ -1023,52 +695,24 @@ export class RegistryClientV2 {
 
         const manifest: Manifest = await resp.dockerJson();
 
-        if (manifest.schemaVersion === 1) {
-            var jws = _jwsFromManifest(manifest, await resp.dockerBody());
-            // Some v2 registries (Amazon ECR) do not provide the
-            // 'docker-content-digest' header.
-            if (resp.headers.has('docker-content-digest')) {
-                _verifyManifestDockerContentDigest(resp, jws);
-            } else {
-                // this.log.debug({headers: resp.headers},
-                //     'no Docker-Content-Digest header on ' +
-                //     'getManifest response');
-            }
-            // TODO
-            // _verifyJws(jws);
-        }
-
-        if (manifest.schemaVersion > maxSchemaVersion) {
-            throw new e.InvalidContentError(
-                `unsupported schema version ${manifest.schemaVersion
-                } in ${this.repo.localName}:${opts.ref} manifest`);
+        if (manifest.schemaVersion as number === 1) {
+            throw new Error(`schemaVersion 1 is not supported by /x/docker_registry_client.`);
         }
 
         // Verify the manifest contents.
         var layers: Array<unknown> | undefined;
-        if (manifest.schemaVersion === 1) {
-            layers = manifest.fsLayers;
-            if (layers!.length !== manifest.history!.length) {
-                throw new e.InvalidContentError(
-                    'history length not equal to layers length in '
-                    + `${this.repo.localName}:${opts.ref} manifest`);
-            }
-        } else if (manifest.schemaVersion === 2) {
-            const mediaType = manifest.mediaType || resp.headers.get('content-type');
-            if (mediaType === MEDIATYPE_MANIFEST_LIST_V2
-                    || mediaType === MEDIATYPE_OCI_MANIFEST_INDEX_V1) {
-                layers = (manifest as ManifestOCIIndex).manifests;
-            } else {
-                layers = (manifest as ManifestOCI).layers;
-            }
+        const mediaType = manifest.mediaType || resp.headers.get('content-type');
+        if (mediaType === MEDIATYPE_MANIFEST_LIST_V2
+                || mediaType === MEDIATYPE_OCI_MANIFEST_INDEX_V1) {
+            layers = (manifest as ManifestOCIIndex).manifests;
+        } else {
+            layers = (manifest as ManifestOCI).layers;
         }
         if (!layers || layers.length === 0) {
             throw new e.InvalidContentError(
                 `no layers or manifests in ${this.repo.localName}:${opts.ref} manifest`);
         }
 
-        // TODO: `verifyTrustedKeys` from
-        // docker/graph/pull_v2.go#validateManifest()
         return {resp, manifest};
     };
 

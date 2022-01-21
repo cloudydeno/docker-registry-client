@@ -35,9 +35,6 @@ export async function assertThrowsHttp<T = void>(
 }
 
 export function getFirstLayerDigestFromManifest(manifest: Manifest) {
-  if (manifest.schemaVersion === 1) {
-      return manifest.fsLayers![0].blobSum;
-  }
   if (manifest.mediaType !== MEDIATYPE_MANIFEST_V2) throw new Error(
       `unexpected non-image manifest`);
   return manifest.layers![0].digest;

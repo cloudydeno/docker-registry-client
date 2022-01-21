@@ -15,9 +15,9 @@ import {
     dirname,
 } from "./util.ts";
 
-import { createClient } from "../lib/registry-client-v2.ts";
+import { createClient, MEDIATYPE_MANIFEST_V2 } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
-import { ManifestV1 } from "../lib/types.ts";
+import { ManifestV2 } from "../lib/types.ts";
 
 // --- globals
 
@@ -25,7 +25,7 @@ const REPO = 'quay.io/coreos/etcd';
 const repo = parseRepo(REPO);
 // Note: Not using TAG='latest' as a workaround for
 // <https://github.com/joyent/node-docker-registry-client/issues/12>.
-const TAG = 'v2.0.0';
+const TAG = 'v3.5.0';
 
 // --- Tests
 
@@ -57,10 +57,11 @@ Deno.test('v2 quay.io / ping', async () => {
     */
 Deno.test('v2 quay.io / listTags', async () => {
     const client = createClient({ repo });
+    const tag = "latest"; // pagination is broken so this might need to change over time
     const tags = await client.listTags();
     assertEquals(tags.name, repo.remoteName);
-    assert(tags.tags.indexOf(TAG) !== -1,
-        'tag "'+TAG+'" in listTags:' + JSON.stringify(tags));
+    assert(tags.tags.indexOf(tag) !== -1,
+        'tag "'+tag+'" in listTags:' + JSON.stringify(tags));
 });
 
 /*
@@ -77,22 +78,20 @@ Deno.test('v2 quay.io / listTags', async () => {
     *      "signature": <JWS>
     *  }
     */
-let _manifest: ManifestV1 | null;
+let _manifest: ManifestV2 | null;
 let _manifestDigest: string | null;
 Deno.test('v2 quay.io / getManifest', async () => {
     const client = createClient({ repo });
     const {manifest, resp} = await client.getManifest({ref: TAG});
     _manifestDigest = resp.headers.get('docker-content-digest');
     assert(manifest);
-    assertEquals(manifest.schemaVersion, 1);
-    assert(manifest.schemaVersion === 1);
+    assertEquals(manifest.schemaVersion, 2);
+    assert(manifest.schemaVersion === 2);
+    assertEquals(manifest.mediaType, MEDIATYPE_MANIFEST_V2);
+    assert(manifest.mediaType === MEDIATYPE_MANIFEST_V2);
     _manifest = manifest ?? null;
-    assertEquals(manifest.name, repo.remoteName);
-    assertEquals(manifest.tag, TAG);
-    assert(manifest.architecture);
-    assert(manifest.fsLayers);
-    assert(manifest.history?.[0].v1Compatibility);
-    assert(manifest.signatures?.[0].signature);
+    assert(manifest.layers);
+    assertEquals(manifest.layers?.[0].mediaType, "application/vnd.docker.image.rootfs.diff.tar.gzip");
 });
 
 Deno.test('v2 quay.io / getManifest (by digest)', async () => {
@@ -101,10 +100,11 @@ Deno.test('v2 quay.io / getManifest (by digest)', async () => {
     const {manifest} = await client.getManifest({ref: _manifestDigest});
     assert(manifest);
     assertEquals(_manifest.schemaVersion, manifest.schemaVersion);
-    assert(manifest.schemaVersion === 1);
-    assertEquals(_manifest.name, manifest.name);
-    assertEquals(_manifest.tag, manifest.tag);
-    assertEquals(_manifest.architecture, manifest.architecture);
+    assert(manifest.schemaVersion === 2);
+    assert(manifest.mediaType === MEDIATYPE_MANIFEST_V2);
+    assertEquals(_manifest.mediaType, manifest.mediaType);
+    assertEquals(_manifest.config.digest, manifest.config.digest);
+    assertEquals(_manifest.layers?.[0].digest, manifest.layers[0].digest);
 });
 
 Deno.test('v2 quay.io / getManifest (unknown tag)', async () => {
@@ -116,7 +116,6 @@ Deno.test('v2 quay.io / getManifest (unknown tag)', async () => {
 
 Deno.test('v2 quay.io / getManifest (unknown repo)', async () => {
     const client = createClient({
-        maxSchemaVersion: 2,
         name: dirname(REPO) + '/unknownreponame',
         // log: log
     });
@@ -127,7 +126,6 @@ Deno.test('v2 quay.io / getManifest (unknown repo)', async () => {
 
 Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
     const client = createClient({
-        maxSchemaVersion: 2,
         repo,
         username: 'fredNoExistHere',
         password: 'fredForgot',
@@ -189,7 +187,7 @@ Deno.test('v2 quay.io / headBlob (unknown digest)', async () => {
 Deno.test('v2 quay.io / createBlobReadStream', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
     const client = createClient({ repo });
-    const digest = _manifest.fsLayers[0].blobSum;
+    const digest = _manifest.layers[0].digest;
     const {ress, stream} = await client.createBlobReadStream({ digest });
     assert(ress, 'got responses');
     assert(Array.isArray(ress), 'ress is an array');

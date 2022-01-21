@@ -17,7 +17,7 @@ import {
     assert, assertEquals, assertThrowsHttp,
 } from "./util.ts";
 
-import { createClient } from "../lib/registry-client-v2.ts";
+import { createClient, MEDIATYPE_MANIFEST_V2 } from "../lib/registry-client-v2.ts";
 import { parseRepo } from "../lib/common.ts";
 
 // --- globals
@@ -66,12 +66,10 @@ Deno.test('v2 registry.access.redhat.com / getManifest (redirected)', async () =
     const client = createClient(clientOpts);
     const {manifest} = await client.getManifest({ref: TAG});
     assert(manifest, 'Got the manifest');
-    assertEquals(manifest.schemaVersion, 1);
-    assert(manifest.schemaVersion == 1);
-    assertEquals(manifest.name, repo.remoteName);
-    assertEquals(manifest.tag, TAG);
-    assert(manifest.architecture);
-    assert(manifest.fsLayers);
-    assert(manifest.history![0].v1Compatibility);
-    assert(manifest.signatures![0].signature);
+    assertEquals(manifest.schemaVersion, 2);
+    assert(manifest.schemaVersion == 2);
+    assertEquals(manifest.mediaType, MEDIATYPE_MANIFEST_V2);
+    assert(manifest.mediaType === MEDIATYPE_MANIFEST_V2);
+    assert(manifest.config.digest);
+    assert(manifest.layers[0].digest);
 });

@@ -33,36 +33,11 @@ export interface TagList {
 
 
 export type Manifest =
-| ManifestV1
 | ManifestV2
 | ManifestV2List
 | ManifestOCI
 | ManifestOCIIndex
 ;
-
-export interface ManifestV1 {
-  schemaVersion: 1;
-
-  name: string;
-  tag: string;
-  /** architecture is the host architecture on which this image is intended to run. */
-  architecture: string;
-  /** fsLayers is a list of filesystem layer blob sums contained in this image. */
-  fsLayers: Array<{
-    blobSum: string;
-  }>;
-  history: Array<{
-    /** This will contain the JSON object describing the V1 of this image. */
-    v1Compatibility: string;
-  }>;
-  signatures?: Array<{
-    header: Record<string, any>; // JOSE header
-    /** The signed protected header */
-    protected: string;
-    /** A signature for the image manifest, signed by a libtrust private key */
-    signature: string;
-  }>;
-}
 
 export interface ManifestV2 {
   schemaVersion: 2;
@@ -142,9 +117,8 @@ export interface RegistryClientOpts {
   token?: string; // for bearer auth
   insecure?: boolean;
   scheme?: string;
-  acceptOCIManifests?: boolean; // implies maxSchemaVersion 2
+  acceptOCIManifests?: boolean;
   acceptManifestLists?: boolean;
-  maxSchemaVersion?: number;
   userAgent?: string;
   scopes?: string[];
 };

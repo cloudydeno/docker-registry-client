@@ -136,7 +136,6 @@ Deno.test('v2 registry.gitlab.com / getManifest (by digest)', async () => {
     const client = createClient({ repo });
     const {manifest} = await client.getManifest({
         ref: _manifestDigest!,
-        maxSchemaVersion: 2,
     });
     assert(manifest);
     assertEquals(_manifest!.schemaVersion, manifest.schemaVersion);
@@ -155,7 +154,6 @@ Deno.test('v2 registry.gitlab.com / getManifest (unknown tag)', async () => {
 
 Deno.test('v2 registry.gitlab.com / getManifest (unknown repo)', async () => {
     const client = createClient({
-        maxSchemaVersion: 2,
         name: dirname(REPO) + '/unknownreponame',
     });
     await assertThrowsHttp(async () => {
@@ -165,7 +163,6 @@ Deno.test('v2 registry.gitlab.com / getManifest (unknown repo)', async () => {
 
 Deno.test('v2 registry.gitlab.com / getManifest (bad username/password)', async () => {
     const client = createClient({
-        maxSchemaVersion: 2,
         repo,
         username: 'fredNoExistHere',
         password: 'fredForgot',

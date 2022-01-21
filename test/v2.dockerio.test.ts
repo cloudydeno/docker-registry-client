@@ -74,14 +74,12 @@ Deno.test('v2 docker.io / getManifest (v2.1)', async () => {
     const client = createClient({ repo });
     const {manifest} = await client.getManifest({ref: TAG});
     assert(manifest);
-    assertEquals(manifest.schemaVersion, 1);
-    assert(manifest.schemaVersion === 1);
-    assertEquals(manifest.name, repo.remoteName);
-    assertEquals(manifest.tag, TAG);
-    assert(manifest.architecture);
-    assert(manifest.fsLayers);
-    assert(manifest.history[0].v1Compatibility);
-    assert(manifest.signatures?.[0].signature);
+    assertEquals(manifest.schemaVersion, 2);
+    assert(manifest.schemaVersion === 2);
+    assertEquals(manifest.mediaType, MEDIATYPE_MANIFEST_V2);
+    assert(manifest.mediaType === MEDIATYPE_MANIFEST_V2);
+    assert(manifest.config.digest);
+    assert(manifest.layers[0].digest);
 });
 
 /*
@@ -107,7 +105,6 @@ Deno.test('v2 docker.io / getManifest (v2.2 list)', async () => {
     const client = createClient({ repo });
     var getOpts = {
         acceptManifestLists: true,
-        maxSchemaVersion: 2,
         ref: TAG
     };
     const {manifest} = await client.getManifest(getOpts);
@@ -195,7 +192,6 @@ Deno.test('v2 docker.io / getManifest (unknown tag)', async () => {
 
 Deno.test('v2 docker.io / getManifest (unknown repo)', async () => {
     const client = createClient({
-        maxSchemaVersion: 2,
         name: 'unknownreponame',
     });
     await assertThrowsHttp(async () => {
@@ -205,7 +201,6 @@ Deno.test('v2 docker.io / getManifest (unknown repo)', async () => {
 
 Deno.test('v2 docker.io / getManifest (bad username/password)', async () => {
     const client = createClient({
-        maxSchemaVersion: 2,
         repo,
         username: 'fredNoExistHere',
         password: 'fredForgot',

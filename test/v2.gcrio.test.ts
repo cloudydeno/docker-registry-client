@@ -124,7 +124,6 @@ Deno.test('v2 gcr.io / getManifest (unknown tag)', async () => {
 
 Deno.test('v2 gcr.io / getManifest (unknown repo)', async () => {
     const client = createClient({
-        maxSchemaVersion: 2,
         name: 'unknownreponame',
     });
     await assertThrowsHttp(async () => {
@@ -134,7 +133,6 @@ Deno.test('v2 gcr.io / getManifest (unknown repo)', async () => {
 
 Deno.test('v2 gcr.io / getManifest (bad username/password)', async () => {
     const client = createClient({
-        maxSchemaVersion: 2,
         repo,
         username: 'fredNoExistHere',
         password: 'fredForgot',

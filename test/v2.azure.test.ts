@@ -14,8 +14,8 @@ import {
     hashAndCount,
 } from "./util.ts";
 
-import { createClient, digestFromManifestStr, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "../lib/registry-client-v2.ts";
-import { parseRepo } from "../lib/common.ts";
+import { RegistryClientV2, digestFromManifestStr } from "../lib/registry-client-v2.ts";
+import { parseRepo, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
 import { ManifestV2 } from "../lib/types.ts";
 
 // --- globals
@@ -27,14 +27,14 @@ const TAG = 'latest';
 
 const repo = parseRepo(REPO);
 
-Deno.test('v2 mcr.microsoft.com / createClient', async () => {
-    const client = createClient({ repo });
+Deno.test('v2 mcr.microsoft.com / RegistryClientV2', async () => {
+    const client = new RegistryClientV2({ repo });
     assert(client);
     assertEquals(client.version, 2);
 });
 
 Deno.test('v2 mcr.microsoft.com / ping', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const res = await client.ping();
     assert(res, 'have a response');
     assertEquals(res.status, 200);
@@ -44,7 +44,7 @@ Deno.test('v2 mcr.microsoft.com / ping', async () => {
 });
 
 Deno.test('v2 mcr.microsoft.com / listTags', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const tags = await client.listTags();
     assert(tags);
     assertEquals(tags.name, repo.remoteName);
@@ -52,7 +52,7 @@ Deno.test('v2 mcr.microsoft.com / listTags', async () => {
 });
 
 Deno.test('v2 mcr.microsoft.com / getManifest (v2.1)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const {manifest} = await client.getManifest({ref: TAG});
     assert(manifest);
     assertEquals(manifest.schemaVersion, 2);
@@ -66,7 +66,7 @@ Deno.test('v2 mcr.microsoft.com / getManifest (v2.1)', async () => {
 let _manifest: ManifestV2 | null;
 let _manifestDigest: string | null;
 Deno.test('v2 mcr.microsoft.com / getManifest (v2.2 list)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     var getOpts = {
         acceptManifestLists: true,
         ref: TAG
@@ -90,7 +90,7 @@ Deno.test('v2 mcr.microsoft.com / getManifest (v2.2 list)', async () => {
 });
 
 Deno.test('v2 mcr.microsoft.com / getManifest (v2.2)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     var getOpts = {ref: TAG, maxSchemaVersion: 2};
     const {manifest, resp} = await client.getManifest(getOpts);
     assert(manifest);
@@ -114,7 +114,7 @@ Deno.test('v2 mcr.microsoft.com / getManifest (v2.2)', async () => {
 
 Deno.test('v2 mcr.microsoft.com / getManifest (by digest)', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     var getOpts = {ref: _manifestDigest, maxSchemaVersion: 2};
     const {manifest} = await client.getManifest(getOpts);
     assert(manifest, 'Got the manifest object');
@@ -126,14 +126,14 @@ Deno.test('v2 mcr.microsoft.com / getManifest (by digest)', async () => {
 });
 
 Deno.test('v2 mcr.microsoft.com / getManifest (unknown tag)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'unknowntag'});
     }, 404);
 });
 
 Deno.test('v2 mcr.microsoft.com / getManifest (unknown repo)', async () => {
-    const client = createClient({
+    const client = new RegistryClientV2({
         name: 'unknownreponame',
     });
     await assertThrowsHttp(async () => {
@@ -144,7 +144,7 @@ Deno.test('v2 mcr.microsoft.com / getManifest (unknown repo)', async () => {
 // MCR seems to act like it doesn't need auth...
 // which will be a problem for private access!
 // Deno.test('v2 mcr.microsoft.com / getManifest (bad username/password)', async () => {
-//     const client = createClient({
+//     const client = new RegistryClientV2({
 //         repo,
 //         username: 'fredNoExistHere',
 //         password: 'fredForgot',
@@ -156,7 +156,7 @@ Deno.test('v2 mcr.microsoft.com / getManifest (unknown repo)', async () => {
 
 Deno.test('v2 mcr.microsoft.com / headBlob', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     var digest = getFirstLayerDigestFromManifest(_manifest);
     const ress = await client.headBlob({digest: digest});
     assert(ress, 'got a "ress"');
@@ -182,7 +182,7 @@ Deno.test('v2 mcr.microsoft.com / headBlob', async () => {
 });
 
 Deno.test('v2 mcr.microsoft.com / headBlob (unknown digest)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const {resp} = await assertThrowsHttp(async () => {
         await client.headBlob({digest: 'cafebabe'});
     }, 404);
@@ -192,7 +192,7 @@ Deno.test('v2 mcr.microsoft.com / headBlob (unknown digest)', async () => {
 
 Deno.test('v2 mcr.microsoft.com / createBlobReadStream', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const digest = getFirstLayerDigestFromManifest(_manifest);
     const {ress, stream} = await client.createBlobReadStream({digest: digest});
     assert(ress, 'got responses');
@@ -223,7 +223,7 @@ Deno.test('v2 mcr.microsoft.com / createBlobReadStream', async () => {
 });
 
 Deno.test('v2 mcr.microsoft.com / createBlobReadStream (unknown digest)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const {resp} = await assertThrowsHttp(async () => {
         await client.createBlobReadStream({digest: 'cafebabe'})
     }, 404);

@@ -20,8 +20,8 @@ import {
     dirname,
 } from "./util.ts";
 
-import { createClient, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "../lib/registry-client-v2.ts";
-import { parseRepo } from "../lib/common.ts";
+import { RegistryClientV2 } from "../lib/registry-client-v2.ts";
+import { parseRepo, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
 import { ManifestV2 } from "../lib/types.ts";
 
 // --- globals
@@ -34,14 +34,14 @@ const TAG = 'hello-world';
 
 const repo = parseRepo(REPO);
 
-Deno.test('v2 registry.gitlab.com / createClient', async () => {
-    const client = createClient({ repo });
+Deno.test('v2 registry.gitlab.com / RegistryClientV2', async () => {
+    const client = new RegistryClientV2({ repo });
     assert(client);
     assertEquals(client.version, 2);
 });
 
 Deno.test('v2 registry.gitlab.com / ping', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const res = await client.ping();
     assert(res, 'have a response');
     assertEquals(res.status, 401);
@@ -56,7 +56,7 @@ Deno.test('v2 registry.gitlab.com / ping', async () => {
     *  }
     */
 Deno.test('v2 registry.gitlab.com / listTags', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const tags = await client.listTags();
     assert(tags);
     assertEquals(tags.name, repo.remoteName);
@@ -79,7 +79,7 @@ Deno.test('v2 registry.gitlab.com / listTags', async () => {
     */
 // Seems like Gitlab isn't serving up v2.1 anymore.
 // Deno.test('v2 registry.gitlab.com / getManifest (v2.1)', async () => {
-//     const client = createClient({ repo });
+//     const client = new RegistryClientV2({ repo });
 //     const {manifest} = await client.getManifest({ref: TAG});
 //     assert(manifest);
 //     assertEquals(manifest.schemaVersion, 1);
@@ -113,7 +113,7 @@ Deno.test('v2 registry.gitlab.com / listTags', async () => {
 let _manifest: ManifestV2 | null;
 let _manifestDigest: string | null;
 Deno.test('v2 registry.gitlab.com / getManifest (v2.2)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     var getOpts = {ref: TAG, maxSchemaVersion: 2};
     const {manifest, resp} = await client.getManifest(getOpts);
     _manifestDigest = resp.headers.get('docker-content-digest');
@@ -133,7 +133,7 @@ Deno.test('v2 registry.gitlab.com / getManifest (v2.2)', async () => {
     * otherwise you will get a manifest not found error.
     */
 Deno.test('v2 registry.gitlab.com / getManifest (by digest)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const {manifest} = await client.getManifest({
         ref: _manifestDigest!,
     });
@@ -146,14 +146,14 @@ Deno.test('v2 registry.gitlab.com / getManifest (by digest)', async () => {
 });
 
 Deno.test('v2 registry.gitlab.com / getManifest (unknown tag)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'unknowntag'});
     }, 404);
 });
 
 Deno.test('v2 registry.gitlab.com / getManifest (unknown repo)', async () => {
-    const client = createClient({
+    const client = new RegistryClientV2({
         name: dirname(REPO) + '/unknownreponame',
     });
     await assertThrowsHttp(async () => {
@@ -162,7 +162,7 @@ Deno.test('v2 registry.gitlab.com / getManifest (unknown repo)', async () => {
 });
 
 Deno.test('v2 registry.gitlab.com / getManifest (bad username/password)', async () => {
-    const client = createClient({
+    const client = new RegistryClientV2({
         repo,
         username: 'fredNoExistHere',
         password: 'fredForgot',
@@ -174,7 +174,7 @@ Deno.test('v2 registry.gitlab.com / getManifest (bad username/password)', async 
 
 Deno.test('v2 registry.gitlab.com / headBlob', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     var digest = getFirstLayerDigestFromManifest(_manifest);
     const ress = await client.headBlob({digest: digest});
     assert(ress, 'got a "ress"');
@@ -200,7 +200,7 @@ Deno.test('v2 registry.gitlab.com / headBlob', async () => {
 });
 
 Deno.test('v2 registry.gitlab.com / headBlob (unknown digest)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const {resp} = await assertThrowsHttp(async () => {
         await client.headBlob({digest: 'cafebabe'});
     }, 404);
@@ -210,7 +210,7 @@ Deno.test('v2 registry.gitlab.com / headBlob (unknown digest)', async () => {
 
 Deno.test('v2 registry.gitlab.com / createBlobReadStream', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const digest = getFirstLayerDigestFromManifest(_manifest);
     const {ress, stream} = await client.createBlobReadStream({digest: digest});
     assert(ress, 'got responses');
@@ -241,7 +241,7 @@ Deno.test('v2 registry.gitlab.com / createBlobReadStream', async () => {
 });
 
 Deno.test('v2 registry.gitlab.com / createBlobReadStream (unknown digest)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const {resp} = await assertThrowsHttp(async () => {
         await client.createBlobReadStream({digest: 'cafebabe'})
     }, 404);

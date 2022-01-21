@@ -35,8 +35,8 @@ test('v2 amazonecr', function (tt) {
     var noauthClient;
     var repo = drc.parseRepo(CONFIG.repo);
 
-    tt.test('  createClient', function (t) {
-        noauthClient = drc.createClientV2({
+    tt.test('  RegistryClientV2', function (t) {
+        noauthClient = drc.RegistryClientV2({
             name: CONFIG.repo,
             maxSchemaVersion: 2,
             log: log
@@ -83,8 +83,8 @@ test('v2 amazonecr', function (tt) {
     /*
      * Login using auth.
      */
-    tt.test('  createClient', function (t) {
-        client = drc.createClientV2({
+    tt.test('  RegistryClientV2', function (t) {
+        client = drc.RegistryClientV2({
             maxSchemaVersion: 2,
             name: CONFIG.repo,
             username: CONFIG.username,
@@ -165,7 +165,7 @@ test('v2 amazonecr', function (tt) {
     });
 
     tt.test('  getManifest (unknown repo)', function (t) {
-        var badRepoClient = drc.createClientV2({
+        var badRepoClient = drc.RegistryClientV2({
             maxSchemaVersion: 2,
             name: path.dirname(CONFIG.repo) + '/unknownreponame',
             username: CONFIG.username,
@@ -183,7 +183,7 @@ test('v2 amazonecr', function (tt) {
     });
 
     tt.test('  getManifest (bad username/password)', function (t) {
-        var badUserClient = drc.createClientV2({
+        var badUserClient = drc.RegistryClientV2({
             maxSchemaVersion: 2,
             name: CONFIG.repo,
             username: 'AWS',

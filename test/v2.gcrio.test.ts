@@ -14,8 +14,8 @@ import {
     hashAndCount,
 } from "./util.ts";
 
-import { createClient, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "../lib/registry-client-v2.ts";
-import { parseRepo } from "../lib/common.ts";
+import { RegistryClientV2 } from "../lib/registry-client-v2.ts";
+import { parseRepo, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
 import { ManifestV2 } from "../lib/types.ts";
 
 // --- globals
@@ -31,19 +31,19 @@ const clientOpts = {
     name: REPO,
 };
 
-Deno.test('v2 gcr.io / createClient', async () => {
-    const client = createClient(clientOpts);
+Deno.test('v2 gcr.io / RegistryClientV2', async () => {
+    const client = new RegistryClientV2(clientOpts);
     assertEquals(client.version, 2);
 });
 
 Deno.test('v2 gcr.io / supportsV2', async () => {
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     const supportsV2 = await client.supportsV2();
     assert(supportsV2, 'supportsV2');
 });
 
 Deno.test('v2 gcr.io / ping', async () => {
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     const res = await client.ping();
     assertEquals(res.status, 401);
     assert(res.headers.has('www-authenticate'));
@@ -59,7 +59,7 @@ Deno.test('v2 gcr.io / ping', async () => {
     *  }
     */
 Deno.test('v2 gcr.io / listTags', async () => {
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     const tags = await client.listTags();
     assert(tags);
     assertEquals(tags.name, repo.remoteName);
@@ -87,7 +87,7 @@ Deno.test('v2 gcr.io / listTags', async () => {
 let _manifest: ManifestV2 | null;
 let _manifestDigest: string | null;
 Deno.test('v2 gcr.io / getManifest', async () => {
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     const {manifest, resp} = await client.getManifest({ref: TAG});
     _manifestDigest = resp.headers.get('docker-content-digest');
     assert(manifest);
@@ -105,7 +105,7 @@ Deno.test('v2 gcr.io / getManifest', async () => {
 
 Deno.test('v2 gcr.io / getManifest (by digest)', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     const {manifest} = await client.getManifest({ref: _manifestDigest});
     assert(manifest);
     assertEquals(_manifest!.schemaVersion, manifest.schemaVersion);
@@ -116,14 +116,14 @@ Deno.test('v2 gcr.io / getManifest (by digest)', async () => {
 });
 
 Deno.test('v2 gcr.io / getManifest (unknown tag)', async () => {
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'unknowntag'});
     }, 404);
 });
 
 Deno.test('v2 gcr.io / getManifest (unknown repo)', async () => {
-    const client = createClient({
+    const client = new RegistryClientV2({
         name: 'unknownreponame',
     });
     await assertThrowsHttp(async () => {
@@ -132,7 +132,7 @@ Deno.test('v2 gcr.io / getManifest (unknown repo)', async () => {
 });
 
 Deno.test('v2 gcr.io / getManifest (bad username/password)', async () => {
-    const client = createClient({
+    const client = new RegistryClientV2({
         repo,
         username: 'fredNoExistHere',
         password: 'fredForgot',
@@ -145,7 +145,7 @@ Deno.test('v2 gcr.io / getManifest (bad username/password)', async () => {
 
 Deno.test('v2 gcr.io / headBlob', async () => {
     if (!_manifest) throw new Error('cannot test');
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     const digest = _manifest.layers?.[0].digest;
     const ress = await client.headBlob({ digest });
     assert(Array.isArray(ress), 'responses is an array');
@@ -186,7 +186,7 @@ Deno.test('v2 gcr.io / headBlob', async () => {
 });
 
 Deno.test('v2 gcr.io / headBlob (unknown digest)', async () => {
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     await assertThrowsHttp(async () => {
         await client.headBlob({digest: 'cafebabe'});
     }, 400); // seems to be the latest code for this
@@ -205,7 +205,7 @@ Deno.test('v2 gcr.io / headBlob (unknown digest)', async () => {
 
 Deno.test('v2 gcr.io / createBlobReadStream', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const digest = getFirstLayerDigestFromManifest(_manifest);
     const {ress, stream} = await client.createBlobReadStream({ digest });
     assert(ress, 'got responses');
@@ -240,7 +240,7 @@ Deno.test('v2 gcr.io / createBlobReadStream', async () => {
 });
 
 Deno.test('v2 gcr.io / createBlobReadStream (unknown digest)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     await assertThrowsHttp(async () => {
         await client.createBlobReadStream({digest: 'cafebabe'})
     }, 400);

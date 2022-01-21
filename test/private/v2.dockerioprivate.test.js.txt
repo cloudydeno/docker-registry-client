@@ -60,8 +60,8 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
     var client;
     var repo = drc.parseRepo(CONFIG.repo);
 
-    tt.test('  createClient', function (t) {
-        client = drc.createClientV2({
+    tt.test('  RegistryClientV2', function (t) {
+        client = drc.RegistryClientV2({
             maxSchemaVersion: 2,
             name: CONFIG.repo,
             username: CONFIG.username,
@@ -110,7 +110,7 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
      */
     var noAuthClient;
     tt.test('  noAuthClient: setup', function (t) {
-        noAuthClient = drc.createClientV2({
+        noAuthClient = drc.RegistryClientV2({
             name: CONFIG.repo,
             maxSchemaVersion: 2,
             log: log

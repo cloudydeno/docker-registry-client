@@ -56,7 +56,7 @@ mainline({cmd: cmd}, function (log, parser, opts, args) {
     assert.string(filepath, 'must specify a blob filepath');
     var contents = fs.readFileSync(filepath).toString();
 
-    var client = drc.RegistryClientV2V2({
+    var client = drc.RegistryClientV2({
         repo: rar,
         log: log,
         insecure: opts.insecure,

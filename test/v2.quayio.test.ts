@@ -15,8 +15,8 @@ import {
     dirname,
 } from "./util.ts";
 
-import { createClient, MEDIATYPE_MANIFEST_V2 } from "../lib/registry-client-v2.ts";
-import { parseRepo } from "../lib/common.ts";
+import { RegistryClientV2 } from "../lib/registry-client-v2.ts";
+import { parseRepo, MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
 import { ManifestV2 } from "../lib/types.ts";
 
 // --- globals
@@ -29,19 +29,19 @@ const TAG = 'v3.5.0';
 
 // --- Tests
 
-Deno.test('v2 quay.io / createClient', () => {
-    const client = createClient({ repo });
+Deno.test('v2 quay.io / RegistryClientV2', () => {
+    const client = new RegistryClientV2({ repo });
     assertEquals(client.version, 2);
 });
 
 Deno.test('v2 quay.io / supportsV2', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const supportsV2 = await client.supportsV2();
     assertEquals(supportsV2, true);
 });
 
 Deno.test('v2 quay.io / ping', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const res = await client.ping();
     assertEquals(res.status, 401);
     assert(res.headers.get('www-authenticate'));
@@ -56,7 +56,7 @@ Deno.test('v2 quay.io / ping', async () => {
     *  }
     */
 Deno.test('v2 quay.io / listTags', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const tag = "latest"; // pagination is broken so this might need to change over time
     const tags = await client.listTags();
     assertEquals(tags.name, repo.remoteName);
@@ -81,7 +81,7 @@ Deno.test('v2 quay.io / listTags', async () => {
 let _manifest: ManifestV2 | null;
 let _manifestDigest: string | null;
 Deno.test('v2 quay.io / getManifest', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const {manifest, resp} = await client.getManifest({ref: TAG});
     _manifestDigest = resp.headers.get('docker-content-digest');
     assert(manifest);
@@ -96,7 +96,7 @@ Deno.test('v2 quay.io / getManifest', async () => {
 
 Deno.test('v2 quay.io / getManifest (by digest)', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const {manifest} = await client.getManifest({ref: _manifestDigest});
     assert(manifest);
     assertEquals(_manifest.schemaVersion, manifest.schemaVersion);
@@ -108,14 +108,14 @@ Deno.test('v2 quay.io / getManifest (by digest)', async () => {
 });
 
 Deno.test('v2 quay.io / getManifest (unknown tag)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'unknowntag'});
     }, 404);
 });
 
 Deno.test('v2 quay.io / getManifest (unknown repo)', async () => {
-    const client = createClient({
+    const client = new RegistryClientV2({
         name: dirname(REPO) + '/unknownreponame',
         // log: log
     });
@@ -125,7 +125,7 @@ Deno.test('v2 quay.io / getManifest (unknown repo)', async () => {
 });
 
 Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
-    const client = createClient({
+    const client = new RegistryClientV2({
         repo,
         username: 'fredNoExistHere',
         password: 'fredForgot',
@@ -138,7 +138,7 @@ Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
 
 Deno.test('v2 quay.io / headBlob', async () => {
     if (!_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     var digest = getFirstLayerDigestFromManifest(_manifest);
     const ress = await client.headBlob({ digest });
     assert(ress);
@@ -169,7 +169,7 @@ Deno.test('v2 quay.io / headBlob', async () => {
 });
 
 Deno.test('v2 quay.io / headBlob (unknown digest)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
 
     const {resp} = await assertThrowsHttp(async () => {
         await client.headBlob({digest: 'cafebabe'});
@@ -186,7 +186,7 @@ Deno.test('v2 quay.io / headBlob (unknown digest)', async () => {
 
 Deno.test('v2 quay.io / createBlobReadStream', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const digest = _manifest.layers[0].digest;
     const {ress, stream} = await client.createBlobReadStream({ digest });
     assert(ress, 'got responses');
@@ -215,7 +215,7 @@ Deno.test('v2 quay.io / createBlobReadStream', async () => {
 });
 
 Deno.test('v2 quay.io / createBlobReadStream (unknown digest)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     await assertThrowsHttp(async () => {
         await client.createBlobReadStream({digest: 'cafebabe'});
     }, 405); // Not too sure why this is a 405 instead of a 404

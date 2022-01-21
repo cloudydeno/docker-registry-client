@@ -17,8 +17,8 @@ import {
     assert, assertEquals, assertThrowsHttp,
 } from "./util.ts";
 
-import { createClient, MEDIATYPE_MANIFEST_V2 } from "../lib/registry-client-v2.ts";
-import { parseRepo } from "../lib/common.ts";
+import { RegistryClientV2 } from "../lib/registry-client-v2.ts";
+import { parseRepo, MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
 
 // --- globals
 
@@ -33,20 +33,20 @@ const clientOpts = {
 
 // --- Tests
 
-Deno.test('v2 registry.access.redhat.com / createClient', () => {
-    const client = createClient(clientOpts);
+Deno.test('v2 registry.access.redhat.com / RegistryClientV2', () => {
+    const client = new RegistryClientV2(clientOpts);
     assert(client);
     assertEquals(client.version, 2);
 });
 
 Deno.test('v2 registry.access.redhat.com / supportsV2', async () => {
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     const supportsV2 = await client.supportsV2();
     assert(supportsV2, 'supportsV2');
 });
 
 Deno.test('v2 registry.access.redhat.com / ping', async () => {
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     const res = await client.ping();
     assert(res, 'have a response');
     assertEquals(res.status, 200);
@@ -55,7 +55,7 @@ Deno.test('v2 registry.access.redhat.com / ping', async () => {
 });
 
 Deno.test('v2 registry.access.redhat.com / getManifest (no redirects)', async () => {
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     const {resp} = await assertThrowsHttp(async () => {
         await client.getManifest({ref: TAG, followRedirects: false});
     });
@@ -63,7 +63,7 @@ Deno.test('v2 registry.access.redhat.com / getManifest (no redirects)', async ()
 });
 
 Deno.test('v2 registry.access.redhat.com / getManifest (redirected)', async () => {
-    const client = createClient(clientOpts);
+    const client = new RegistryClientV2(clientOpts);
     const {manifest} = await client.getManifest({ref: TAG});
     assert(manifest, 'Got the manifest');
     assertEquals(manifest.schemaVersion, 2);

@@ -14,8 +14,8 @@ import {
     hashAndCount,
 } from "./util.ts";
 
-import { createClient, digestFromManifestStr, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "../lib/registry-client-v2.ts";
-import { parseRepo } from "../lib/common.ts";
+import { RegistryClientV2, digestFromManifestStr } from "../lib/registry-client-v2.ts";
+import { parseRepo, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
 import { ManifestV2 } from "../lib/types.ts";
 
 // --- globals
@@ -27,14 +27,14 @@ const TAG = 'latest';
 
 const repo = parseRepo(REPO);
 
-Deno.test('v2 docker.io / createClient', async () => {
-    const client = createClient({ repo });
+Deno.test('v2 docker.io / RegistryClientV2', async () => {
+    const client = new RegistryClientV2({ repo });
     assert(client);
     assertEquals(client.version, 2);
 });
 
 Deno.test('v2 docker.io / ping', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const res = await client.ping();
     assert(res, 'have a response');
     assertEquals(res.status, 401);
@@ -49,7 +49,7 @@ Deno.test('v2 docker.io / ping', async () => {
     *  }
     */
 Deno.test('v2 docker.io / listTags', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const tags = await client.listTags();
     assert(tags);
     assertEquals(tags.name, repo.remoteName);
@@ -71,7 +71,7 @@ Deno.test('v2 docker.io / listTags', async () => {
     *  }
     */
 Deno.test('v2 docker.io / getManifest (v2.1)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const {manifest} = await client.getManifest({ref: TAG});
     assert(manifest);
     assertEquals(manifest.schemaVersion, 2);
@@ -102,7 +102,7 @@ Deno.test('v2 docker.io / getManifest (v2.1)', async () => {
 let _manifest: ManifestV2 | null;
 let _manifestDigest: string | null;
 Deno.test('v2 docker.io / getManifest (v2.2 list)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     var getOpts = {
         acceptManifestLists: true,
         ref: TAG
@@ -144,7 +144,7 @@ Deno.test('v2 docker.io / getManifest (v2.2 list)', async () => {
     * }
     */
 Deno.test('v2 docker.io / getManifest (v2.2)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     var getOpts = {ref: TAG, maxSchemaVersion: 2};
     const {manifest, resp} = await client.getManifest(getOpts);
     assert(manifest);
@@ -172,7 +172,7 @@ Deno.test('v2 docker.io / getManifest (v2.2)', async () => {
     */
 Deno.test('v2 docker.io / getManifest (by digest)', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     var getOpts = {ref: _manifestDigest, maxSchemaVersion: 2};
     const {manifest} = await client.getManifest(getOpts);
     assert(manifest, 'Got the manifest object');
@@ -184,14 +184,14 @@ Deno.test('v2 docker.io / getManifest (by digest)', async () => {
 });
 
 Deno.test('v2 docker.io / getManifest (unknown tag)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     await assertThrowsHttp(async () => {
         await client.getManifest({ref: 'unknowntag'});
     }, 404);
 });
 
 Deno.test('v2 docker.io / getManifest (unknown repo)', async () => {
-    const client = createClient({
+    const client = new RegistryClientV2({
         name: 'unknownreponame',
     });
     await assertThrowsHttp(async () => {
@@ -200,7 +200,7 @@ Deno.test('v2 docker.io / getManifest (unknown repo)', async () => {
 });
 
 Deno.test('v2 docker.io / getManifest (bad username/password)', async () => {
-    const client = createClient({
+    const client = new RegistryClientV2({
         repo,
         username: 'fredNoExistHere',
         password: 'fredForgot',
@@ -212,7 +212,7 @@ Deno.test('v2 docker.io / getManifest (bad username/password)', async () => {
 
 Deno.test('v2 docker.io / headBlob', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     var digest = getFirstLayerDigestFromManifest(_manifest);
     const ress = await client.headBlob({digest: digest});
     assert(ress, 'got a "ress"');
@@ -238,7 +238,7 @@ Deno.test('v2 docker.io / headBlob', async () => {
 });
 
 Deno.test('v2 docker.io / headBlob (unknown digest)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const {resp} = await assertThrowsHttp(async () => {
         await client.headBlob({digest: 'cafebabe'});
     }, 404);
@@ -248,7 +248,7 @@ Deno.test('v2 docker.io / headBlob (unknown digest)', async () => {
 
 Deno.test('v2 docker.io / createBlobReadStream', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const digest = getFirstLayerDigestFromManifest(_manifest);
     const {ress, stream} = await client.createBlobReadStream({digest: digest});
     assert(ress, 'got responses');
@@ -279,7 +279,7 @@ Deno.test('v2 docker.io / createBlobReadStream', async () => {
 });
 
 Deno.test('v2 docker.io / createBlobReadStream (unknown digest)', async () => {
-    const client = createClient({ repo });
+    const client = new RegistryClientV2({ repo });
     const {resp} = await assertThrowsHttp(async () => {
         await client.createBlobReadStream({digest: 'cafebabe'})
     }, 404);

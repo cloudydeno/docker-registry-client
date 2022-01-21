@@ -53,8 +53,8 @@ test('v2 gcr.io private', function (tt) {
     var client;
     var repo = drc.parseRepo(CONFIG.repo);
 
-    tt.test('  createClient', function (t) {
-        client = drc.createClientV2({
+    tt.test('  RegistryClientV2', function (t) {
+        client = drc.RegistryClientV2({
             name: CONFIG.repo,
             maxSchemaVersion: 2,
             username: CONFIG.username,

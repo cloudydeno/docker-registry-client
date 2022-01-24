@@ -839,9 +839,10 @@ export class RegistryClientV2 {
             scope: _makeAuthScope('repository', this.repo.remoteName!, ['pull', 'push']),
         });
 
+        const startUploadPath = `/v2/${encodeURI(this.repo.remoteName!)}/blobs/uploads/`;
         const sessionResponse = await this._api.request({
             method: 'POST',
-            path: `/v2/${encodeURI(this.repo.remoteName!)}/blobs/uploads/`,
+            path: startUploadPath,
             headers: _setAuthHeaderFromAuthInfo(new Headers(), this._authInfo ?? null),
             expectStatus: [202],
         }).catch(cause => Promise.reject(new e.UploadError("Blob upload rejected.", {cause})));
@@ -849,7 +850,7 @@ export class RegistryClientV2 {
         if (!uploadUrl) throw new e.UploadError(
             'No registry upload location header returned');
 
-        const destinationUrl = new URL(uploadUrl);
+        const destinationUrl = new URL(uploadUrl, new URL(startUploadPath, this._url));
         destinationUrl.searchParams.append('digest', opts.digest);
         await this._api.request({
             method: 'PUT',

@@ -26,27 +26,23 @@ const REPO = 'registry.access.redhat.com/rhel';
 const TAG = 'latest';
 
 const repo = parseRepo(REPO);
-const clientOpts = {
-    maxSchemaVersion: 1,
-    name: REPO,
-};
 
 // --- Tests
 
 Deno.test('v2 registry.access.redhat.com / RegistryClientV2', () => {
-    const client = new RegistryClientV2(clientOpts);
+    const client = new RegistryClientV2({ name: REPO });
     assert(client);
     assertEquals(client.version, 2);
 });
 
 Deno.test('v2 registry.access.redhat.com / supportsV2', async () => {
-    const client = new RegistryClientV2(clientOpts);
+    const client = new RegistryClientV2({ name: REPO });
     const supportsV2 = await client.supportsV2();
     assert(supportsV2, 'supportsV2');
 });
 
 Deno.test('v2 registry.access.redhat.com / ping', async () => {
-    const client = new RegistryClientV2(clientOpts);
+    const client = new RegistryClientV2({ name: REPO });
     const res = await client.ping();
     assert(res, 'have a response');
     assertEquals(res.status, 200);
@@ -55,7 +51,7 @@ Deno.test('v2 registry.access.redhat.com / ping', async () => {
 });
 
 Deno.test('v2 registry.access.redhat.com / getManifest (no redirects)', async () => {
-    const client = new RegistryClientV2(clientOpts);
+    const client = new RegistryClientV2({ name: REPO });
     const {resp} = await assertThrowsHttp(async () => {
         await client.getManifest({ref: TAG, followRedirects: false});
     });
@@ -63,7 +59,7 @@ Deno.test('v2 registry.access.redhat.com / getManifest (no redirects)', async ()
 });
 
 Deno.test('v2 registry.access.redhat.com / getManifest (redirected)', async () => {
-    const client = new RegistryClientV2(clientOpts);
+    const client = new RegistryClientV2({ name: REPO });
     const {manifest} = await client.getManifest({ref: TAG});
     assert(manifest, 'Got the manifest');
     assertEquals(manifest.schemaVersion, 2);

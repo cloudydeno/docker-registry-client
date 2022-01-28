@@ -39,7 +39,6 @@ const client = new RegistryClientV2({
     insecure: opts.insecure,
     username: opts.username,
     password: opts.password,
-    maxSchemaVersion: (opts.schema || 1),
     acceptManifestLists: false,
 });
 
@@ -48,7 +47,6 @@ const slug = rar.localName!.replace(/[^\w]+/g, '-') + '-' +
 
 const {manifest, resp} = await client.getManifest({
     ref: rar.tag || rar.digest || '',
-    maxSchemaVersion: 2,
 });
 const digest = resp.headers.get('docker-content-digest');
 

@@ -145,8 +145,7 @@ Deno.test('v2 docker.io / getManifest (v2.2 list)', async () => {
     */
 Deno.test('v2 docker.io / getManifest (v2.2)', async () => {
     const client = new RegistryClientV2({ repo });
-    var getOpts = {ref: TAG, maxSchemaVersion: 2};
-    const {manifest, resp} = await client.getManifest(getOpts);
+    const {manifest, resp} = await client.getManifest({ ref: TAG });
     assert(manifest);
     assertEquals(manifest.schemaVersion, 2);
     assert(manifest.schemaVersion === 2);
@@ -173,8 +172,7 @@ Deno.test('v2 docker.io / getManifest (v2.2)', async () => {
 Deno.test('v2 docker.io / getManifest (by digest)', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
     const client = new RegistryClientV2({ repo });
-    var getOpts = {ref: _manifestDigest, maxSchemaVersion: 2};
-    const {manifest} = await client.getManifest(getOpts);
+    const {manifest} = await client.getManifest({ ref: _manifestDigest });
     assert(manifest, 'Got the manifest object');
     assertEquals(_manifest!.schemaVersion, manifest.schemaVersion);
     assert(manifest.schemaVersion === 2);

@@ -114,8 +114,7 @@ let _manifest: ManifestV2 | null;
 let _manifestDigest: string | null;
 Deno.test('v2 registry.gitlab.com / getManifest (v2.2)', async () => {
     const client = new RegistryClientV2({ repo });
-    var getOpts = {ref: TAG, maxSchemaVersion: 2};
-    const {manifest, resp} = await client.getManifest(getOpts);
+    const {manifest, resp} = await client.getManifest({ ref: TAG });
     _manifestDigest = resp.headers.get('docker-content-digest');
     assertEquals(manifest.schemaVersion, 2);
     assert(manifest.schemaVersion === 2);

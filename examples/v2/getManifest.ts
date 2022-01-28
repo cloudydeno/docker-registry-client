@@ -43,7 +43,6 @@ var client = new RegistryClientV2({
     username: opts.username,
     password: opts.password,
     acceptOCIManifests: opts['accept-oci'],
-    maxSchemaVersion: (opts.schema || 2)
 });
 var tagOrDigest = rar.tag || rar.digest || '';
 const {resp, manifest} = await client.getManifest({

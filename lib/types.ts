@@ -95,7 +95,7 @@ export interface ManifestOCIIndex {
     mediaType: string;
     digest: string;
     size: number;
-    platform: {
+    platform?: {
       "architecture": string;
       "os": string;
       "os.version"?: string; // windows version
@@ -103,6 +103,8 @@ export interface ManifestOCIIndex {
       "variant"?: string; // cpu variant
       "features"?: string[]; // cpu features
     };
+    /** Used for OCI Image Layouts */
+    annotations?: Record<string, string>;
   }>;
   annotations?: Record<string, string>;
 }

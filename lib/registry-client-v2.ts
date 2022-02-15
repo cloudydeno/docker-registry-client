@@ -799,7 +799,7 @@ export class RegistryClientV2 {
     */
     async putManifest(opts: {
         manifestData: Uint8Array;
-        ref: string;
+        ref: string; // or digest
         schemaVersion?: number;
         mediaType?: string;
     }) {
@@ -812,7 +812,7 @@ export class RegistryClientV2 {
 
         const response = await this._api.request({
             method: 'PUT',
-            path: `/v2/${encodeURI(this.repo.remoteName!)}/manifests/${encodeURIComponent(opts.ref)}`,
+            path: `/v2/${encodeURI(this.repo.remoteName!)}/manifests/${opts.ref}`,
             headers: _setAuthHeaderFromAuthInfo(new Headers({
                 'content-type': mediaType,
             }), this._authInfo ?? null),

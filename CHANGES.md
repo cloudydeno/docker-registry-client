@@ -3,6 +3,7 @@
 ## 0.4.1
 
 - /std@0.130.0
+- Thus requiring Deno v1.17 or newer
 
 ## 0.4.0
 

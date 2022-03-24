@@ -8,6 +8,8 @@ Support for v1 registries has been removed and support for OCI registries has be
 The [original Node.JS project](https://github.com/joyent/node-docker-registry-client)
 supported v1 registries/manifests.
 
+Requires Deno v1.17 or later to typecheck cleanly, starting from v0.4.0.
+
 ## Design Points
 
 * Only handling the v2 Registry API.

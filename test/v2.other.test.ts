@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import { assertEquals } from "https://deno.land/std@0.120.0/testing/asserts.ts";
+import { assertEquals } from "https://deno.land/std@0.130.0/testing/asserts.ts";
 import { digestFromManifestStr } from "../lib/registry-client-v2.ts";
 
 /*

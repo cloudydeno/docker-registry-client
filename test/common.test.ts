@@ -8,7 +8,7 @@
  * Copyright (c) 2015, Joyent, Inc.
  */
 
-import { assertEquals, assertThrows, assertObjectMatch } from "https://deno.land/std@0.120.0/testing/asserts.ts";
+import { assertEquals, assertThrows, assertObjectMatch } from "https://deno.land/std@0.130.0/testing/asserts.ts";
 import { parseIndex, parseRepo, parseRepoAndRef, parseRepoAndTag } from "../lib/common.ts";
 import { RegistryIndex } from "../lib/types.ts";
 

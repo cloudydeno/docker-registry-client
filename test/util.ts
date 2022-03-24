@@ -1,9 +1,9 @@
-export { assertEquals, assert } from "https://deno.land/std@0.120.0/testing/asserts.ts";
-export { dirname } from "https://deno.land/std@0.120.0/path/posix.ts";
+export { assertEquals, assert } from "https://deno.land/std@0.130.0/testing/asserts.ts";
+export { dirname } from "https://deno.land/std@0.130.0/path/posix.ts";
 
 
-import { Sha256 } from "https://deno.land/std@0.120.0/hash/sha256.ts";
-import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.120.0/testing/asserts.ts";
+import { Sha256 } from "https://deno.land/std@0.130.0/hash/sha256.ts";
+import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.130.0/testing/asserts.ts";
 
 import { HttpError } from "../lib/errors.ts";
 import { MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";

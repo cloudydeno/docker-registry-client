@@ -3,7 +3,7 @@
  * Copyright (c) 2015, Joyent, Inc.
  */
 
-import { Md5 } from "https://deno.land/std@0.120.0/hash/md5.ts";
+import { Md5 } from "https://deno.land/std@0.130.0/hash/md5.ts";
 import { HttpError } from "./errors.ts";
 import { DockerResponse as DockerResponseInterface } from "./types.ts";
 

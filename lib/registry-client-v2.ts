@@ -8,7 +8,6 @@ import { Sha256 } from "https://deno.land/std@0.120.0/hash/sha256.ts";
 
 import {
     parseRepo,
-    isLocalhost,
     urlFromIndex,
     DEFAULT_USERAGENT,
     splitIntoTwo,
@@ -19,7 +18,7 @@ import {
 } from "./common.ts";
 import {
     Manifest,
-    RegistryImage,
+    RegistryRepo,
     RegistryClientOpts,
     AuthInfo,
     TagList,
@@ -32,8 +31,6 @@ import * as e from "./errors.ts";
  * Copyright 2017 Joyent, Inc.
  */
 
-// https://github.com/docker/docker/blob/77da5d8/registry/config_unix.go#L10
-const DEFAULT_V2_REGISTRY = 'https://registry-1.docker.io';
 const MAX_REGISTRY_ERROR_LENGTH = 10000;
 
 /*
@@ -283,7 +280,7 @@ export function digestFromManifestStr(manifestStr: string): string {
 export class RegistryClientV2 {
     readonly version = 2;
     insecure: boolean;
-    repo: RegistryImage;
+    repo: RegistryRepo;
     acceptOCIManifests: boolean;
     acceptManifestLists: boolean;
     username?: string;
@@ -309,24 +306,10 @@ export class RegistryClientV2 {
     constructor(opts: RegistryClientOpts) {
         this.insecure = Boolean(opts.insecure);
         if (opts.repo) {
-            this.repo = {
-                ...opts.repo,
-                index: { ...opts.repo.index },
-            };
+            this.repo = opts.repo;
         } else if (opts.name) {
             this.repo = parseRepo(opts.name);
         } else throw new Error(`name or repo required`);
-        if (opts.scheme) {
-            this.repo.index.scheme = opts.scheme;
-        } else if (!this.repo.index.scheme &&
-            isLocalhost(this.repo.index.name))
-        {
-            // Per docker.git:registry/config.go#NewServiceConfig we special
-            // case localhost to allow HTTP. Note that this lib doesn't do
-            // the "try HTTPS, then fallback to HTTP if allowed" thing that
-            // Docker-docker does, we'll just prefer HTTP for localhost.
-            this.repo.index.scheme = 'http';
-        }
 
         this.acceptOCIManifests = opts.acceptOCIManifests || false;
         this.acceptManifestLists = opts.acceptManifestLists || false;
@@ -355,13 +338,7 @@ export class RegistryClientV2 {
             });
         }
 
-        if (this.repo.index.official) {  // v1
-            this._url = DEFAULT_V2_REGISTRY;
-        } else {
-            this._url = urlFromIndex(this.repo.index);
-        }
-        // this.log.trace({url: this._url}, 'RegistryClientV2 url');
-
+        this._url = urlFromIndex(this.repo.index, opts.scheme);
         this._commonHttpClientOpts = {
             userAgent: opts.userAgent || DEFAULT_USERAGENT,
         };
@@ -551,7 +528,7 @@ export class RegistryClientV2 {
         pingRes?: DockerResponse;
         scope?: string;
     } = {}) {
-        var scope = opts.scope || _makeAuthScope('repository', this.repo.remoteName!, this.scopes);
+        var scope = opts.scope || _makeAuthScope('repository', this.repo.remoteName, this.scopes);
 
         if (this._loggedIn && this._loggedInScope === scope) {
             return;
@@ -596,7 +573,7 @@ export class RegistryClientV2 {
         await this.login();
         const res = await this._api.request({
             method: 'GET',
-            path: `/v2/${encodeURI(this.repo.remoteName!)}/tags/list`,
+            path: `/v2/${encodeURI(this.repo.remoteName)}/tags/list`,
             headers: this._headers,
             redirect: 'follow',
         });
@@ -804,7 +781,7 @@ export class RegistryClientV2 {
         mediaType?: string;
     }) {
         await this.login({
-            scope: _makeAuthScope('repository', this.repo.remoteName!, ['pull', 'push']),
+            scope: _makeAuthScope('repository', this.repo.remoteName, ['pull', 'push']),
         });
 
         const mediaType = opts.mediaType ??
@@ -812,7 +789,7 @@ export class RegistryClientV2 {
 
         const response = await this._api.request({
             method: 'PUT',
-            path: `/v2/${encodeURI(this.repo.remoteName!)}/manifests/${opts.ref}`,
+            path: `/v2/${encodeURI(this.repo.remoteName)}/manifests/${opts.ref}`,
             headers: _setAuthHeaderFromAuthInfo(new Headers({
                 'content-type': mediaType,
             }), this._authInfo ?? null),
@@ -836,10 +813,10 @@ export class RegistryClientV2 {
         contentType?: string;
     }) {
         await this.login({
-            scope: _makeAuthScope('repository', this.repo.remoteName!, ['pull', 'push']),
+            scope: _makeAuthScope('repository', this.repo.remoteName, ['pull', 'push']),
         });
 
-        const startUploadPath = `/v2/${encodeURI(this.repo.remoteName!)}/blobs/uploads/`;
+        const startUploadPath = `/v2/${encodeURI(this.repo.remoteName)}/blobs/uploads/`;
         const sessionResponse = await this._api.request({
             method: 'POST',
             path: startUploadPath,

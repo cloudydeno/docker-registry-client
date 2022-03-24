@@ -10,6 +10,7 @@
 
 import { assertEquals, assertThrows, assertObjectMatch } from "https://deno.land/std@0.120.0/testing/asserts.ts";
 import { parseIndex, parseRepo, parseRepoAndRef, parseRepoAndTag } from "../lib/common.ts";
+import { RegistryIndex } from "../lib/types.ts";
 
 // --- Tests
 
@@ -143,7 +144,7 @@ Deno.test('parseRepoAndRef', () => {
         'tag': 'latest'
     });
 
-    const defaultIndex = {
+    const defaultIndex: RegistryIndex = {
         'scheme': 'https',
         'name': 'myreg.example.com:1234',
         'official': false
@@ -271,7 +272,7 @@ Deno.test('parseRepoAndTag', () => {
         'tag': 'latest'
     });
 
-    const defaultIndex = {
+    const defaultIndex: RegistryIndex = {
         'scheme': 'https',
         'name': 'myreg.example.com:1234',
         'official': false
@@ -292,7 +293,7 @@ Deno.test('parseRepoAndTag', () => {
 
 
 Deno.test('parseRepo', () => {
-    assertEquals(parseRepo('busybox'), {
+    assertObjectMatch(parseRepo('busybox'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -302,7 +303,7 @@ Deno.test('parseRepo', () => {
         'localName': 'busybox',
         'canonicalName': 'docker.io/busybox'
     });
-    assertEquals(parseRepo('google/python'), {
+    assertObjectMatch(parseRepo('google/python'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -312,7 +313,7 @@ Deno.test('parseRepo', () => {
         'localName': 'google/python',
         'canonicalName': 'docker.io/google/python'
     });
-    assertEquals(parseRepo('docker.io/ubuntu'), {
+    assertObjectMatch(parseRepo('docker.io/ubuntu'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -322,7 +323,7 @@ Deno.test('parseRepo', () => {
         'localName': 'ubuntu',
         'canonicalName': 'docker.io/ubuntu'
     });
-    assertEquals(parseRepo('localhost:5000/blarg'), {
+    assertObjectMatch(parseRepo('localhost:5000/blarg'), {
         'index': {
             'name': 'localhost:5000',
             'official': false
@@ -334,7 +335,7 @@ Deno.test('parseRepo', () => {
     });
 
     // With alternate default index.
-    assertEquals(parseRepo('foo/bar', 'docker.io'), {
+    assertObjectMatch(parseRepo('foo/bar', 'docker.io'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -346,7 +347,7 @@ Deno.test('parseRepo', () => {
     });
 
     const defaultIndexStr = 'https://myreg.example.com:1234';
-    assertEquals(parseRepo('foo/bar', defaultIndexStr), {
+    assertObjectMatch(parseRepo('foo/bar', defaultIndexStr), {
         'index': {
             'scheme': 'https',
             'name': 'myreg.example.com:1234',
@@ -358,12 +359,12 @@ Deno.test('parseRepo', () => {
         'canonicalName': 'myreg.example.com:1234/foo/bar'
     });
 
-    const defaultIndex = {
+    const defaultIndex: RegistryIndex = {
         'scheme': 'https',
         'name': 'myreg.example.com:1234',
         'official': false
     };
-    assertEquals(parseRepo('foo/bar', defaultIndex), {
+    assertObjectMatch(parseRepo('foo/bar', defaultIndex), {
         'index': {
             'scheme': 'https',
             'name': 'myreg.example.com:1234',
@@ -379,7 +380,7 @@ Deno.test('parseRepo', () => {
         parseRepo('registry.gitlab.com/user@name/repo-a/repo-b');
     }, Error, 'invalid repository namespace');
 
-    assertEquals(parseRepo('registry.gitlab.com/user.name/repo-a/repo-b'), {
+    assertObjectMatch(parseRepo('registry.gitlab.com/user.name/repo-a/repo-b'), {
         'index': {
             'name': 'registry.gitlab.com',
             'official': false
@@ -393,15 +394,15 @@ Deno.test('parseRepo', () => {
 
 
 Deno.test('parseIndex', () => {
-    assertEquals(parseIndex('docker.io'), {
+    assertObjectMatch(parseIndex('docker.io'), {
         'name': 'docker.io',
         'official': true
     });
-    assertEquals(parseIndex('index.docker.io'), {
+    assertObjectMatch(parseIndex('index.docker.io'), {
         'name': 'docker.io',
         'official': true
     });
-    assertEquals(parseIndex('https://docker.io'), {
+    assertObjectMatch(parseIndex('https://docker.io'), {
         'name': 'docker.io',
         'official': true,
         'scheme': 'https'
@@ -409,25 +410,25 @@ Deno.test('parseIndex', () => {
     assertThrows(() => {
         parseIndex('http://docker.io');
     }, Error, 'disallowed');
-    assertEquals(parseIndex('index.docker.io'), {
+    assertObjectMatch(parseIndex('index.docker.io'), {
         'name': 'docker.io',
         'official': true
     });
-    assertEquals(parseIndex('quay.io'), {
+    assertObjectMatch(parseIndex('quay.io'), {
         'name': 'quay.io',
         'official': false
     });
-    assertEquals(parseIndex('https://quay.io'), {
+    assertObjectMatch(parseIndex('https://quay.io'), {
         'name': 'quay.io',
         'official': false,
         'scheme': 'https'
     });
-    assertEquals(parseIndex('http://quay.io'), {
+    assertObjectMatch(parseIndex('http://quay.io'), {
         'name': 'quay.io',
         'official': false,
         'scheme': 'http'
     });
-    assertEquals(parseIndex('localhost:5000'), {
+    assertObjectMatch(parseIndex('localhost:5000'), {
         'name': 'localhost:5000',
         'official': false
     });
@@ -442,7 +443,7 @@ Deno.test('parseIndex', () => {
         parseIndex('foo');
     }, Error, 'look');
 
-    assertEquals(parseIndex('docker.io/'), {
+    assertObjectMatch(parseIndex('docker.io/'), {
         'name': 'docker.io',
         'official': true
     });
@@ -451,7 +452,7 @@ Deno.test('parseIndex', () => {
     }, Error, 'invalid');
 
     // Test special casing for this URL passed from 'docker login' by default.
-    assertEquals(parseIndex('https://index.docker.io/v1/'), {
+    assertObjectMatch(parseIndex('https://index.docker.io/v1/'), {
         'name': 'docker.io',
         'official': true
     });

@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import { RegistryImage, RegistryIndex } from "./types.ts";
+import { RegistryImage, RegistryIndex, RegistryRepo } from "./types.ts";
 
 export const MEDIATYPE_MANIFEST_V2
     = 'application/vnd.docker.distribution.manifest.v2+json';
@@ -34,7 +34,7 @@ export const DEFAULT_USERAGENT = `deno-docker_registry_client/0.1.0 (${innerBits
 
 // See `INDEXNAME` in docker/docker.git:registry/config.go.
 export const DEFAULT_INDEX_NAME = 'docker.io';
-export const DEFAULT_INDEX_URL = 'https://index.docker.io';
+export const DEFAULT_INDEX_URL = 'https://registry-1.docker.io';
 
 export const DEFAULT_LOGIN_SERVERNAME = 'https://index.docker.io/v1/';
 
@@ -66,70 +66,72 @@ export function splitIntoTwo(str: string, sep: string) {
  *      http://localhost:5000
  *      https://index.docker.io/v1/  (special case)
  *
- * Special case: By default `docker login` sends
- * "servername=https://index.docker.io/v1/". Let's not bork on that. It
- * simplifies `login()` and `ping()` argument handling in the clients to
- * handle this case here.
+ * Special case: `docker` still refers to "https://index.docker.io/v1/"
+ * when dealing with auth (including in its json file).
  *
  * @param {String} arg: Optional. Index name (optionally with leading scheme).
  */
-export function parseIndex(arg?: string) {
-    // assert.optionalString(arg, 'arg');
-
-    var index = {} as RegistryIndex;
-
+export function parseIndex(arg?: string): RegistryIndex {
     if (!arg || arg === DEFAULT_LOGIN_SERVERNAME) {
         // Default index.
-        index.name = DEFAULT_INDEX_NAME;
-        index.official = true;
-    } else {
-        // Optional protocol/scheme.
-        var indexName;
-        var protoSepIdx = arg.indexOf('://');
-        if (protoSepIdx !== -1) {
-            var scheme = arg.slice(0, protoSepIdx);
-            if (['http', 'https'].indexOf(scheme) === -1) {
-                throw new Error('invalid index scheme, must be ' +
-                    '"http" or "https": ' + arg);
-            }
-            index.scheme = scheme;
-            indexName = arg.slice(protoSepIdx + 3);
-        } else {
-            indexName = arg;
-        }
-
-        if (!indexName) {
-            throw new Error('invalid index, empty host: ' + arg);
-        } else if (indexName.indexOf('.') === -1 &&
-            indexName.indexOf(':') === -1 &&
-            indexName !== 'localhost')
-        {
-            throw new Error(`invalid index, "${indexName}" does not look like a valid host: ${arg}`);
-        } else {
-            // Allow a trailing '/' as from some URL builder functions that
-            // add a default '/' path to a URL, e.g. 'https://docker.io/'.
-            if (indexName[indexName.length - 1] === '/') {
-                indexName = indexName.slice(0, indexName.length - 1);
-            }
-
-            // Ensure no trailing repo.
-            if (indexName.indexOf('/') !== -1) {
-                throw new Error('invalid index, trailing repo: ' + arg);
-            }
-        }
-
-        // Per docker.git's `ValidateIndexName`.
-        if (indexName === 'index.' + DEFAULT_INDEX_NAME) {
-            indexName = DEFAULT_INDEX_NAME;
-        }
-
-        index.name = indexName;
-        index.official = Boolean(indexName === DEFAULT_INDEX_NAME);
+        return {
+            scheme: 'https',
+            name: DEFAULT_INDEX_NAME,
+            official: true,
+        };
     }
+
+    // Optional protocol/scheme.
+    let indexName: string;
+    let scheme: 'https' | 'http' = 'https';
+    const protoSepIdx = arg.indexOf('://');
+    if (protoSepIdx !== -1) {
+        const foundScheme = arg.slice(0, protoSepIdx);
+        if (foundScheme !== 'http' && foundScheme !== 'https') {
+            throw new Error('invalid index scheme, must be ' +
+                '"http" or "https": ' + arg);
+        }
+        scheme = foundScheme;
+        indexName = arg.slice(protoSepIdx + 3);
+    } else {
+        scheme = isLocalhost(arg) ? 'http' : 'https';
+        indexName = arg;
+    }
+
+    if (!indexName) {
+        throw new Error('invalid index, empty host: ' + arg);
+    } else if (indexName.indexOf('.') === -1 &&
+        indexName.indexOf(':') === -1 &&
+        indexName !== 'localhost')
+    {
+        throw new Error(`invalid index, "${indexName}" does not look like a valid host: ${arg}`);
+    } else {
+        // Allow a trailing '/' as from some URL builder functions that
+        // add a default '/' path to a URL, e.g. 'https://docker.io/'.
+        if (indexName[indexName.length - 1] === '/') {
+            indexName = indexName.slice(0, indexName.length - 1);
+        }
+
+        // Ensure no trailing repo.
+        if (indexName.indexOf('/') !== -1) {
+            throw new Error('invalid index, trailing repo: ' + arg);
+        }
+    }
+
+    // Per docker.git's `ValidateIndexName`.
+    if (indexName === 'index.' + DEFAULT_INDEX_NAME) {
+        indexName = DEFAULT_INDEX_NAME;
+    }
+
+    const index: RegistryIndex = {
+        name: indexName,
+        official: indexName === DEFAULT_INDEX_NAME,
+        scheme,
+    };
 
     // Disallow official and 'http'.
     if (index.official && index.scheme === 'http') {
-        throw new Error('invalid index, HTTP to official index ' +
+        throw new Error('invalid index, plaintext HTTP to official index ' +
             'is disallowed: ' + arg);
     }
 
@@ -163,12 +165,12 @@ export function parseIndex(arg?: string) {
  *      If given it may either be a string, e.g. 'https://myreg.example.com',
  *      or parsed index object, as from `parseIndex()`.
  */
-export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex) {
-    var info = {} as RegistryImage;
+export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex): RegistryRepo {
+    let index: RegistryIndex;
 
     // Strip off optional leading `INDEX/`, parse it to `info.index` and
     // leave the rest in `remoteName`.
-    var remoteName;
+    let remoteNameRaw: string;
     var protoSepIdx = arg.indexOf('://');
     if (protoSepIdx !== -1) {
         // (A) repo with a protocol, e.g. 'https://host/repo'.
@@ -178,8 +180,8 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex) {
                 'hostame: ' + arg);
         }
         var indexName = arg.slice(0, slashIdx);
-        remoteName = arg.slice(slashIdx + 1);
-        info.index = parseIndex(indexName);
+        remoteNameRaw = arg.slice(slashIdx + 1);
+        index = parseIndex(indexName);
     } else {
         var parts = splitIntoTwo(arg, '/');
         if (parts.length === 1 || (
@@ -190,23 +192,23 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex) {
         {
             // (B) repo without leading 'INDEX/'.
             if (defaultIndex === undefined) {
-                info.index = parseIndex();
+                index = parseIndex();
             } else if (typeof (defaultIndex) === 'string') {
-                info.index = parseIndex(defaultIndex);
+                index = parseIndex(defaultIndex);
             } else {
-                info.index = defaultIndex;
+                index = defaultIndex;
             }
-            remoteName = arg;
+            remoteNameRaw = arg;
         } else {
             // (C) repo with leading 'INDEX/' (without protocol).
-            info.index = parseIndex(parts[0]);
-            remoteName = parts[1];
+            index = parseIndex(parts[0]);
+            remoteNameRaw = parts[1];
         }
     }
 
     // Validate remoteName (docker `validateRemoteName`).
-    var nameParts = splitIntoTwo(remoteName, '/');
-    var ns, name;
+    var nameParts = splitIntoTwo(remoteNameRaw, '/');
+    let ns = '', name: string;
     if (nameParts.length === 2) {
         name = nameParts[1];
 
@@ -229,8 +231,8 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex) {
                 'consecutive hyphens: ' + ns);
         }
     } else {
-        name = remoteName;
-        if (info.index.official) {
+        name = remoteNameRaw;
+        if (index.official) {
             ns = 'library';
         }
     }
@@ -241,28 +243,26 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex) {
             '[a-z0-9_/.-] characters: ' + name);
     }
 
+    let official = index.official && ns === 'library';
+    const remoteName = ns ? `${ns}/${name}` : name;
+    let localName: string;
+    let canonicalName: string;
 
-    info.official = false;
-    if (info.index.official) {
-        info.remoteName = ns + '/' + name;
-        if (ns === 'library') {
-            info.official = true;
-            info.localName = name;
-        } else {
-            info.localName = info.remoteName;
-        }
-        info.canonicalName = DEFAULT_INDEX_NAME + '/' + info.localName;
+    if (index.official) {
+        localName = official ? name : remoteName;
+        canonicalName = DEFAULT_INDEX_NAME + '/' + localName;
     } else {
-        if (ns) {
-            info.remoteName = ns + '/' + name;
-        } else {
-            info.remoteName = name;
-        }
-        info.localName = info.index.name + '/' + info.remoteName;
-        info.canonicalName = info.localName;
+        localName = index.name + '/' + remoteName;
+        canonicalName = localName;
     }
 
-    return info;
+    return {
+        index,
+        official,
+        remoteName,
+        localName,
+        canonicalName,
+    };
 }
 
 
@@ -288,7 +288,7 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex) {
  *      If given it may either be a string, e.g. 'https://myreg.example.com',
  *      or parsed index object, as from `parseIndex()`.
  */
-export function parseRepoAndRef(arg: string, defaultIndex?: string | RegistryIndex) {
+export function parseRepoAndRef(arg: string, defaultIndex?: string | RegistryIndex): RegistryImage {
     // Parse off the tag/digest per
     // https://github.com/docker/docker/blob/0c7b51089c8cd7ef3510a9b40edaa139a7ca91aa/pkg/parsers/parsers.go#L69
     let digest: string | null = null;
@@ -328,23 +328,22 @@ export const parseRepoAndTag = parseRepoAndRef;
 /**
  * Similar in spirit to docker.git:registry/endpoint.go#NewEndpoint().
  */
-export function urlFromIndex(index: RegistryIndex) {
-    // assert.bool(index.official, 'index.official');
-    // assert.optionalString(index.scheme, 'index.scheme');
-    // assert.string(index.name, 'index.name');
-
+export function urlFromIndex(index: RegistryIndex, scheme?: 'http' | 'https') {
     if (index.official) {  // v1
+        if (scheme != null && scheme !== 'https') throw new Error(
+            `Unencrypted communication with docker.io is not allowed`);
         return DEFAULT_INDEX_URL;
     } else {
-        return `${index.scheme || 'https'}://${index.name}`;
+        if (scheme != null && scheme !== 'https' && scheme !== 'http') throw new Error(
+            `Non-HTTP communication with docker registries is not allowed`);
+        return `${scheme ?? index.scheme}://${index.name}`;
     }
 }
 
 
-// TODO: IPv6 support
 export function isLocalhost(host: string) {
     var lead = host.split(':')[0];
-    if (lead === 'localhost' || lead === '127.0.0.1') {
+    if (lead === 'localhost' || lead === '127.0.0.1' || host.includes('::1')) {
         return true;
     } else {
         return false;

@@ -1,18 +1,22 @@
 
 export interface RegistryIndex {
   name: string;
-  official?: boolean;
-  scheme: string;
+  official: boolean;
+  scheme: 'https' | 'http';
 }
 
-export interface RegistryImage {
+export interface RegistryRepo {
   index: RegistryIndex;
-  remoteName?: string;
-  localName?: string;
-  canonicalName?: string;
-  official?: boolean;
-  digest?: string;
-  tag?: string;
+  official: boolean;
+  remoteName: string;
+  localName: string;
+  canonicalName: string;
+}
+
+export interface RegistryImage extends RegistryRepo {
+  digest: string | null;
+  tag: string | null;
+  canonicalRef: string;
 }
 
 
@@ -112,13 +116,13 @@ export interface ManifestOCIIndex {
 
 export interface RegistryClientOpts {
   name?: string; // mutually exclusive with repo
-  repo?: RegistryImage;
+  repo?: RegistryRepo;
   // log
   username?: string;
   password?: string;
   token?: string; // for bearer auth
   insecure?: boolean;
-  scheme?: string;
+  scheme?: 'https' | 'http';
   acceptOCIManifests?: boolean;
   acceptManifestLists?: boolean;
   userAgent?: string;

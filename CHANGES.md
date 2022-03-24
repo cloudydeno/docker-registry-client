@@ -1,5 +1,36 @@
 # deno-docker_registry_client Changelog
 
+## 0.4.1
+
+- /std@0.130.0
+
+## 0.4.0
+
+- Refactor index/repo/image string parsing
+- Support parsing combined `:tag@digest` references
+- Introduce improved `RegistryRepo` type signature
+- Further remove traces of registry v1
+- Add `canonicalRef` to `RegistryImage`, includes digest and/or tag
+- Also detect `::1` as localhost
+
+## 0.3.4
+
+- Fixes typecheck under Deno 1.19 by removing `ErrorInit` reference
+
+## 0.3.3
+
+- Address `putManifest()` encoding issue, fixes use of digest in place of tag
+
+## 0.3.2
+
+- Make `platform` key optional in `ManifestOCIIndex`
+- Add `annotation` key within `manifests` list in `ManifestOCIIndex`
+
+## 0.3.1
+
+- Fix issue with `blobUpload()` when using Google Artifact Registry
+- Remove more traces of v1 support
+
 ## 0.3.0
 
 - Remove v1 manifest support

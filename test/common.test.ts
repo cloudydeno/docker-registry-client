@@ -8,14 +8,14 @@
  * Copyright (c) 2015, Joyent, Inc.
  */
 
-import { assertEquals, assertThrows } from "https://deno.land/std@0.120.0/testing/asserts.ts";
+import { assertEquals, assertThrows, assertObjectMatch } from "https://deno.land/std@0.120.0/testing/asserts.ts";
 import { parseIndex, parseRepo, parseRepoAndRef, parseRepoAndTag } from "../lib/common.ts";
 
 // --- Tests
 
 Deno.test('parseRepoAndRef', () => {
 
-    assertEquals(parseRepoAndRef('busybox'), {
+    assertObjectMatch(parseRepoAndRef('busybox'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -26,7 +26,7 @@ Deno.test('parseRepoAndRef', () => {
         'canonicalName': 'docker.io/busybox',
         'tag': 'latest'
     });
-    assertEquals(parseRepoAndRef('google/python'), {
+    assertObjectMatch(parseRepoAndRef('google/python'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -37,7 +37,7 @@ Deno.test('parseRepoAndRef', () => {
         'canonicalName': 'docker.io/google/python',
         'tag': 'latest'
     });
-    assertEquals(parseRepoAndRef('docker.io/ubuntu'), {
+    assertObjectMatch(parseRepoAndRef('docker.io/ubuntu'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -48,7 +48,7 @@ Deno.test('parseRepoAndRef', () => {
         'canonicalName': 'docker.io/ubuntu',
         'tag': 'latest'
     });
-    assertEquals(parseRepoAndRef('localhost:5000/blarg'), {
+    assertObjectMatch(parseRepoAndRef('localhost:5000/blarg'), {
         'index': {
             'name': 'localhost:5000',
             'official': false
@@ -60,7 +60,7 @@ Deno.test('parseRepoAndRef', () => {
         'tag': 'latest'
     });
 
-    assertEquals(parseRepoAndRef('localhost:5000/blarg:latest'), {
+    assertObjectMatch(parseRepoAndRef('localhost:5000/blarg:latest'), {
         'index': {
             'name': 'localhost:5000',
             'official': false
@@ -71,7 +71,7 @@ Deno.test('parseRepoAndRef', () => {
         'canonicalName': 'localhost:5000/blarg',
         'tag': 'latest'
     });
-    assertEquals(parseRepoAndRef('localhost:5000/blarg:mytag'), {
+    assertObjectMatch(parseRepoAndRef('localhost:5000/blarg:mytag'), {
         'index': {
             'name': 'localhost:5000',
             'official': false
@@ -82,7 +82,7 @@ Deno.test('parseRepoAndRef', () => {
         'canonicalName': 'localhost:5000/blarg',
         'tag': 'mytag'
     });
-    assertEquals(parseRepoAndRef('localhost:5000/blarg@sha256:cafebabe'), {
+    assertObjectMatch(parseRepoAndRef('localhost:5000/blarg@sha256:cafebabe'), {
         'index': {
             'name': 'localhost:5000',
             'official': false
@@ -94,8 +94,22 @@ Deno.test('parseRepoAndRef', () => {
         'digest': 'sha256:cafebabe'
     });
 
+    // With both a tag and a digest.
+    assertObjectMatch(parseRepoAndRef('localhost:5000/blarg:mytag@sha256:cafebabe'), {
+        'index': {
+            'name': 'localhost:5000',
+            'official': false
+        },
+        'official': false,
+        'remoteName': 'blarg',
+        'localName': 'localhost:5000/blarg',
+        'canonicalName': 'localhost:5000/blarg',
+        'tag': 'mytag',
+        'digest': 'sha256:cafebabe'
+    });
+
     // With alternate default index.
-    assertEquals(parseRepoAndRef('foo/bar', 'docker.io'), {
+    assertObjectMatch(parseRepoAndRef('foo/bar', 'docker.io'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -108,7 +122,7 @@ Deno.test('parseRepoAndRef', () => {
     });
 
     const defaultIndexStr = 'https://myreg.example.com:1234';
-    assertEquals(parseRepoAndRef('foo/bar', defaultIndexStr), {
+    assertObjectMatch(parseRepoAndRef('foo/bar', defaultIndexStr), {
         'index': {
             'scheme': 'https',
             'name': 'myreg.example.com:1234',
@@ -126,7 +140,7 @@ Deno.test('parseRepoAndRef', () => {
         'name': 'myreg.example.com:1234',
         'official': false
     };
-    assertEquals(parseRepoAndRef('foo/bar', defaultIndex), {
+    assertObjectMatch(parseRepoAndRef('foo/bar', defaultIndex), {
         'index': {
             'scheme': 'https',
             'name': 'myreg.example.com:1234',
@@ -143,7 +157,7 @@ Deno.test('parseRepoAndRef', () => {
 
 Deno.test('parseRepoAndTag', () => {
 
-    assertEquals(parseRepoAndTag('busybox'), {
+    assertObjectMatch(parseRepoAndTag('busybox'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -154,7 +168,7 @@ Deno.test('parseRepoAndTag', () => {
         'canonicalName': 'docker.io/busybox',
         'tag': 'latest'
     });
-    assertEquals(parseRepoAndTag('google/python'), {
+    assertObjectMatch(parseRepoAndTag('google/python'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -165,7 +179,7 @@ Deno.test('parseRepoAndTag', () => {
         'canonicalName': 'docker.io/google/python',
         'tag': 'latest'
     });
-    assertEquals(parseRepoAndTag('docker.io/ubuntu'), {
+    assertObjectMatch(parseRepoAndTag('docker.io/ubuntu'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -176,7 +190,7 @@ Deno.test('parseRepoAndTag', () => {
         'canonicalName': 'docker.io/ubuntu',
         'tag': 'latest'
     });
-    assertEquals(parseRepoAndTag('localhost:5000/blarg'), {
+    assertObjectMatch(parseRepoAndTag('localhost:5000/blarg'), {
         'index': {
             'name': 'localhost:5000',
             'official': false
@@ -188,7 +202,7 @@ Deno.test('parseRepoAndTag', () => {
         'tag': 'latest'
     });
 
-    assertEquals(parseRepoAndTag('localhost:5000/blarg:latest'), {
+    assertObjectMatch(parseRepoAndTag('localhost:5000/blarg:latest'), {
         'index': {
             'name': 'localhost:5000',
             'official': false
@@ -199,7 +213,7 @@ Deno.test('parseRepoAndTag', () => {
         'canonicalName': 'localhost:5000/blarg',
         'tag': 'latest'
     });
-    assertEquals(parseRepoAndTag('localhost:5000/blarg:mytag'), {
+    assertObjectMatch(parseRepoAndTag('localhost:5000/blarg:mytag'), {
         'index': {
             'name': 'localhost:5000',
             'official': false
@@ -210,7 +224,7 @@ Deno.test('parseRepoAndTag', () => {
         'canonicalName': 'localhost:5000/blarg',
         'tag': 'mytag'
     });
-    assertEquals(parseRepoAndTag('localhost:5000/blarg@sha256:cafebabe'), {
+    assertObjectMatch(parseRepoAndTag('localhost:5000/blarg@sha256:cafebabe'), {
         'index': {
             'name': 'localhost:5000',
             'official': false
@@ -223,7 +237,7 @@ Deno.test('parseRepoAndTag', () => {
     });
 
     // With alternate default index.
-    assertEquals(parseRepoAndTag('foo/bar', 'docker.io'), {
+    assertObjectMatch(parseRepoAndTag('foo/bar', 'docker.io'), {
         'index': {
             'name': 'docker.io',
             'official': true
@@ -236,7 +250,7 @@ Deno.test('parseRepoAndTag', () => {
     });
 
     const defaultIndexStr = 'https://myreg.example.com:1234';
-    assertEquals(parseRepoAndTag('foo/bar', defaultIndexStr), {
+    assertObjectMatch(parseRepoAndTag('foo/bar', defaultIndexStr), {
         'index': {
             'scheme': 'https',
             'name': 'myreg.example.com:1234',
@@ -254,7 +268,7 @@ Deno.test('parseRepoAndTag', () => {
         'name': 'myreg.example.com:1234',
         'official': false
     };
-    assertEquals(parseRepoAndTag('foo/bar', defaultIndex), {
+    assertObjectMatch(parseRepoAndTag('foo/bar', defaultIndex), {
         'index': {
             'scheme': 'https',
             'name': 'myreg.example.com:1234',

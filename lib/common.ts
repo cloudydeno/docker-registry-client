@@ -267,7 +267,7 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex) {
 
 
 /**
- * Parse a docker repo and tag/digest string: [INDEX/]REPO[:TAG|@DIGEST]
+ * Parse a docker repo and tag/digest string: [INDEX/]REPO[:TAG|@DIGEST|:TAG@DIGEST]
  *
  * Examples:
  *    busybox
@@ -276,6 +276,7 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex) {
  *    docker.io/ubuntu
  *    localhost:5000/blarg
  *    http://localhost:5000/blarg:latest
+ *    google/python:3.3@sha256:fb9f16730ac6316afa4d97caa51302199...
  *    alpine@sha256:fb9f16730ac6316afa4d97caa5130219927bfcecf0b0...
  *
  * Dev Notes:
@@ -289,34 +290,30 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex) {
  */
 export function parseRepoAndRef(arg: string, defaultIndex?: string | RegistryIndex) {
     // Parse off the tag/digest per
-    // JSSTYLED
     // https://github.com/docker/docker/blob/0c7b51089c8cd7ef3510a9b40edaa139a7ca91aa/pkg/parsers/parsers.go#L69
-    var repo, tag, digest;
-    var atIdx = arg.lastIndexOf('@');
+    let digest: string | null = null;
+    let tag: string | null = null;
+
+    const atIdx = arg.lastIndexOf('@');
     if (atIdx !== -1) {
-        repo = arg.slice(0, atIdx);
         digest = arg.slice(atIdx + 1);
+        arg = arg.slice(0, atIdx);
     } else {
-        var colonIdx = arg.lastIndexOf(':');
-        var slashIdx = arg.lastIndexOf('/');
-        if (colonIdx !== -1 && colonIdx > slashIdx) {
-            repo = arg.slice(0, colonIdx);
-            tag = arg.slice(colonIdx + 1);
-        } else {
-            repo = arg;
-        }
+        tag = DEFAULT_TAG;
     }
 
-    var info = parseRepo(repo, defaultIndex);
-    if (digest) {
-        info.digest = digest;
-    } else if (tag) {
-        info.tag = tag;
-    } else {
-        info.tag = DEFAULT_TAG;
+    const colonIdx = arg.lastIndexOf(':');
+    const slashIdx = arg.lastIndexOf('/');
+    if (colonIdx !== -1 && colonIdx > slashIdx) {
+        tag = arg.slice(colonIdx + 1);
+        arg = arg.slice(0, colonIdx);
     }
 
-    return info;
+    return {
+        ...parseRepo(arg, defaultIndex),
+        digest,
+        tag,
+    };
 }
 
 export const parseRepoAndTag = parseRepoAndRef;
@@ -338,6 +335,7 @@ export function urlFromIndex(index: RegistryIndex) {
 }
 
 
+// TODO: IPv6 support
 export function isLocalhost(host: string) {
     var lead = host.split(':')[0];
     if (lead === 'localhost' || lead === '127.0.0.1') {

@@ -16,12 +16,13 @@ jobs:
         - v1.14
         - v1.16
         - v1.18
+        - v1.20
         - canary
       fail-fast: false # run each branch to completion
 
     steps:
     - name: Checkout source
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Use Deno ${{ matrix.deno-version }}
       uses: denoland/setup-deno@v1
@@ -31,14 +32,14 @@ jobs:
     # "https" cache: code from the Internet
     # External sources won't change much so we use less precise keys
     - name: Cache https://
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: ~/.cache/deno/deps/https
         key: deno-https/v1-${{ github.sha }}
         restore-keys: deno-https/v1-
 
     - name: Check index.ts
-      run: time deno cache --reload ./lib/index.ts
+      run: time deno cache ./lib/index.ts
 
     - name: Run examples/v2/ping.ts
       run: time ./examples/v2/ping.ts docker.io

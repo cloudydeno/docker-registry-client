@@ -309,10 +309,16 @@ export function parseRepoAndRef(arg: string, defaultIndex?: string | RegistryInd
         arg = arg.slice(0, colonIdx);
     }
 
+    const repo = parseRepo(arg, defaultIndex);
     return {
-        ...parseRepo(arg, defaultIndex),
+        ...repo,
         digest,
         tag,
+        canonicalRef: [
+            repo.canonicalName,
+            tag ? `:${tag}` : '',
+            digest ? `@${digest}` : '',
+        ].join(''),
     };
 }
 

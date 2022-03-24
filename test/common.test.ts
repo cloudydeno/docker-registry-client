@@ -14,7 +14,11 @@ import { parseIndex, parseRepo, parseRepoAndRef, parseRepoAndTag } from "../lib/
 // --- Tests
 
 Deno.test('parseRepoAndRef', () => {
+    function assertRoundTrip(ref: string) {
+        assertEquals(parseRepoAndRef(ref).canonicalRef, ref);
+    }
 
+    assertEquals(parseRepoAndRef('busybox').canonicalRef, 'docker.io/busybox:latest');
     assertObjectMatch(parseRepoAndRef('busybox'), {
         'index': {
             'name': 'docker.io',
@@ -60,6 +64,7 @@ Deno.test('parseRepoAndRef', () => {
         'tag': 'latest'
     });
 
+    assertRoundTrip('localhost:5000/blarg:latest');
     assertObjectMatch(parseRepoAndRef('localhost:5000/blarg:latest'), {
         'index': {
             'name': 'localhost:5000',
@@ -71,6 +76,7 @@ Deno.test('parseRepoAndRef', () => {
         'canonicalName': 'localhost:5000/blarg',
         'tag': 'latest'
     });
+    assertRoundTrip('localhost:5000/blarg:mytag');
     assertObjectMatch(parseRepoAndRef('localhost:5000/blarg:mytag'), {
         'index': {
             'name': 'localhost:5000',
@@ -82,6 +88,7 @@ Deno.test('parseRepoAndRef', () => {
         'canonicalName': 'localhost:5000/blarg',
         'tag': 'mytag'
     });
+    assertRoundTrip('localhost:5000/blarg@sha256:cafebabe');
     assertObjectMatch(parseRepoAndRef('localhost:5000/blarg@sha256:cafebabe'), {
         'index': {
             'name': 'localhost:5000',
@@ -95,6 +102,7 @@ Deno.test('parseRepoAndRef', () => {
     });
 
     // With both a tag and a digest.
+    assertRoundTrip('localhost:5000/blarg:mytag@sha256:cafebabe');
     assertObjectMatch(parseRepoAndRef('localhost:5000/blarg:mytag@sha256:cafebabe'), {
         'index': {
             'name': 'localhost:5000',

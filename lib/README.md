@@ -5,17 +5,17 @@
 A port / fork of a Docker Registry API V2 client.
 Support for v1 registries has been removed and support for OCI registries has been added.
 
-The [original Node.JS project](https://github.com/joyent/node-docker-registry-client)
+The [original Node.JS project](https://github.com/TritonDataCenter/node-docker-registry-client)
 supported v1 registries/manifests.
 
-Requires Deno v1.17 or later to typecheck cleanly, starting from v0.4.0.
+This release is designed for Deno 2.
 
 ## Design Points
 
 * Only handling the v2 Registry API.
 * Typescript, async/await, Promises, `fetch()`
 * Covers most APIs: pull, push, list, delete
-* I'm mostly using gcr.io though there's also some tests against major registries.
+* Used in practice with Github container registries, Google Artifact Registry, and others
 
 ## Auth Approaches
 
@@ -57,6 +57,7 @@ var client = new RegistryClientV2({
     // Optional, for a registry without a signed TLS certificate.
     // NOTE: Deno does not currently support this option
     // insecure: <true|false>,
+    // client: Deno.createHttpClient({ ... }),
     // ... see the source code for other options
 });
 ```

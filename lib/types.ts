@@ -127,6 +127,7 @@ export interface RegistryClientOpts {
   acceptManifestLists?: boolean;
   userAgent?: string;
   scopes?: string[];
+  client?: Deno.HttpClient;
 };
 
 

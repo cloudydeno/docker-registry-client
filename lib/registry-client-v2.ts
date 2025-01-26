@@ -294,6 +294,7 @@ export class RegistryClientV2 {
     private _commonHttpClientOpts: {
         userAgent: string;
     }
+    private readonly _api: DockerJsonClient;
 
     /**
      * Create a new Docker Registry V2 client for a particular repository.
@@ -342,11 +343,10 @@ export class RegistryClientV2 {
         this._commonHttpClientOpts = {
             userAgent: opts.userAgent || DEFAULT_USERAGENT,
         };
-    }
 
-    private get _api() {
-        return new DockerJsonClient({
+        this._api = new DockerJsonClient({
             url: this._url,
+            client: opts.client,
             ...this._commonHttpClientOpts,
         });
     }

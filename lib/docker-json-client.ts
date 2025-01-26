@@ -26,6 +26,7 @@ export class DockerJsonClient {
     contentType: string;
     url: string;
     userAgent: string;
+    client?: Deno.HttpClient;
 
     constructor(options: {
         name?: string;
@@ -34,12 +35,14 @@ export class DockerJsonClient {
         url: string;
         // rejectUnauthorized?: boolean;
         userAgent: string;
+        client?: Deno.HttpClient;
     }) {
         this.accept = options.accept ?? 'application/json';
         this.name = options.name ?? 'DockerJsonClient';
         this.contentType = options.contentType ?? 'application/json';
         this.url = options.url;
         this.userAgent = options.userAgent;
+        this.client = options.client;
     }
 
     async request(opts: HttpReqOpts) {
@@ -50,6 +53,7 @@ export class DockerJsonClient {
         headers.set('user-agent', this.userAgent);
 
         const rawResp = await fetch(new URL(opts.path, this.url), {
+            client: this.client,
             method: opts.method,
             headers: headers,
             redirect: opts.redirect ?? 'manual',

@@ -6,7 +6,7 @@ import { Sha256 } from "https://deno.land/std@0.130.0/hash/sha256.ts";
 import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.130.0/testing/asserts.ts";
 
 import { HttpError } from "../lib/errors.ts";
-import { MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
+import { MEDIATYPE_MANIFEST_V2, MEDIATYPE_OCI_MANIFEST_V1 } from "../lib/common.ts";
 import { Manifest } from "../lib/types.ts";
 
 export async function assertThrowsHttp<T = void>(
@@ -35,8 +35,10 @@ export async function assertThrowsHttp<T = void>(
 }
 
 export function getFirstLayerDigestFromManifest(manifest: Manifest) {
-  if (manifest.mediaType !== MEDIATYPE_MANIFEST_V2) throw new Error(
-      `unexpected non-image manifest`);
+  if (manifest.mediaType !== MEDIATYPE_MANIFEST_V2 &&
+      manifest.mediaType !== MEDIATYPE_OCI_MANIFEST_V1) {
+    throw new Error(`unexpected non-image manifest`);
+  }
   return manifest.layers![0].digest;
 }
 

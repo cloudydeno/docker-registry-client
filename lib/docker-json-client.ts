@@ -53,7 +53,7 @@ export class DockerJsonClient {
         headers.set('user-agent', this.userAgent);
 
         const rawResp = await fetch(new URL(opts.path, this.url), {
-            client: this.client,
+            client: this.client as Deno.HttpClient, // optionalability is weird
             method: opts.method,
             headers: headers,
             redirect: opts.redirect ?? 'manual',
@@ -105,10 +105,11 @@ export class DockerResponse extends Response implements DockerResponseInterface 
         // Parse the body as JSON, if we can.
         try {
             return JSON.parse(text);
-        } catch (jsonErr) {
+        } catch (thrown) {
+            const err = thrown as Error;
             // res.log.trace(jsonErr, 'Invalid JSON in response');
             throw new Error(
-                'Invalid JSON in response: '+jsonErr.message);
+                'Invalid JSON in response: '+err.message);
         }
     }
 
@@ -145,7 +146,8 @@ export class DockerResponse extends Response implements DockerResponseInterface 
             const errorTexts = errors.map(x => '    '+[x.code, x.message, x.detail ? JSON.stringify(x.detail) : ''].filter(x => x).join(': '));
 
             return new HttpError(this, errors, [baseMsg, ...errorTexts].join('\n'));
-        } catch (err) {
+        } catch (thrown) {
+            const err = thrown as Error;
             return new HttpError(this, [], `${baseMsg} - and failed to parse error body: ${err.message}`);
         }
     }

@@ -24,7 +24,7 @@ export class ApiError extends Error {
 }
 
 export class HttpError extends ApiError {
-    name = 'HttpError';
+    override name = 'HttpError';
     constructor(
         public resp: DockerResponse,
         public errors: RegistryError[],
@@ -34,30 +34,30 @@ export class HttpError extends ApiError {
     }
 }
 export class BadDigestError extends ApiError {
-    readonly name = 'BadDigestError';
+    override readonly name = 'BadDigestError';
 }
 export class InvalidContentError extends ApiError {
-    readonly name = 'InvalidContentError';
+    override readonly name = 'InvalidContentError';
 }
 
 export class InternalError extends ApiError {
-    readonly name = 'InternalError';
+    override readonly name = 'InternalError';
 }
 
 export class ManifestVerificationError extends ApiError {
-    readonly name = 'ManifestVerificationError';
+    override readonly name = 'ManifestVerificationError';
 }
 
 export class InvalidManifestError extends ApiError {
-    readonly name = 'InvalidManifestError';
+    override readonly name = 'InvalidManifestError';
 }
 
 export class DownloadError extends ApiError {
-    readonly name = 'DownloadError';
+    override readonly name = 'DownloadError';
 }
 
 export class UploadError extends ApiError {
-    readonly name = 'UploadError';
+    override readonly name = 'UploadError';
 }
 
 // export class UnauthorizedError extends HttpError {
@@ -66,5 +66,5 @@ export class UploadError extends ApiError {
 // }
 
 export class TooManyRedirectsError extends ApiError {
-    readonly name = 'TooManyRedirectsError';
+    override readonly name = 'TooManyRedirectsError';
 }

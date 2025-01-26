@@ -18,7 +18,7 @@ import { RegistryClientV2 } from "../lib/registry-client-v2.ts";
 import { parseRepo, MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
 import { ManifestV2 } from "../lib/types.ts";
 
-const REPO = 'gcr.io/google_containers/pause';
+const REPO = 'gcr.io/google-containers/pause';
 const TAG = 'latest';
 
 const repo = parseRepo(REPO);

@@ -50,13 +50,14 @@ Deno.test('v2 registry.access.redhat.com / ping', async () => {
         'registry/2.0');
 });
 
-Deno.test('v2 registry.access.redhat.com / getManifest (no redirects)', async () => {
-    const client = new RegistryClientV2({ name: REPO });
-    const {resp} = await assertThrowsHttp(async () => {
-        await client.getManifest({ref: TAG, followRedirects: false});
-    });
-    assertEquals(resp.status, 302);
-});
+// Looks like this endpoint stopped redirecting.
+// Deno.test('v2 registry.access.redhat.com / getManifest (no redirects)', async () => {
+//     const client = new RegistryClientV2({ name: REPO });
+//     const {resp} = await assertThrowsHttp(async () => {
+//         await client.getManifest({ref: TAG, followRedirects: false});
+//     });
+//     assertEquals(resp.status, 302);
+// });
 
 Deno.test('v2 registry.access.redhat.com / getManifest (redirected)', async () => {
     const client = new RegistryClientV2({ name: REPO });

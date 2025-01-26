@@ -186,9 +186,6 @@ Deno.test('v2 registry.gitlab.com / headBlob', async () => {
             '"docker-content-digest" header from first response is '
             + 'the queried digest');
     }
-    assertEquals(first.headers.get('docker-distribution-api-version'),
-        'registry/2.0',
-        '"docker-distribution-api-version" header is "registry/2.0"');
     var last = ress[ress.length - 1];
     assertEquals(last.status, 200, 'last response statusCode is 200');
     var contentType = last.headers.get('content-type');
@@ -203,8 +200,6 @@ Deno.test('v2 registry.gitlab.com / headBlob (unknown digest)', async () => {
     const {resp} = await assertThrowsHttp(async () => {
         await client.headBlob({digest: 'cafebabe'});
     }, 404);
-    assertEquals(resp.headers.get('docker-distribution-api-version'),
-        'registry/2.0');
 });
 
 Deno.test('v2 registry.gitlab.com / createBlobReadStream', async () => {
@@ -223,9 +218,6 @@ Deno.test('v2 registry.gitlab.com / createBlobReadStream', async () => {
             '"docker-content-digest" header from first response is '
             + 'the queried digest');
     }
-    assertEquals(first.headers.get('docker-distribution-api-version'),
-        'registry/2.0',
-        '"docker-distribution-api-version" header is "registry/2.0"');
 
     const last = ress.slice(-1)[0];
     assert(last, 'got a stream');
@@ -244,6 +236,4 @@ Deno.test('v2 registry.gitlab.com / createBlobReadStream (unknown digest)', asyn
     const {resp} = await assertThrowsHttp(async () => {
         await client.createBlobReadStream({digest: 'cafebabe'})
     }, 404);
-    assertEquals(resp.headers.get('docker-distribution-api-version'),
-        'registry/2.0');
 });

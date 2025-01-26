@@ -14,9 +14,9 @@ import {
     hashAndCount,
 } from "./util.ts";
 
-import { RegistryClientV2, digestFromManifestStr } from "../lib/registry-client-v2.ts";
-import { parseRepo, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
-import { ManifestV2 } from "../lib/types.ts";
+import { digestFromManifestStr, RegistryClientV2 } from "../lib/registry-client-v2.ts";
+import { parseRepo, MEDIATYPE_OCI_MANIFEST_INDEX_V1 } from "../lib/common.ts";
+import { ManifestOCIIndex } from "../lib/types.ts";
 
 // --- globals
 
@@ -76,54 +76,13 @@ Deno.test('v2 docker.io / getManifest (v2.1)', async () => {
     assert(manifest);
     assertEquals(manifest.schemaVersion, 2);
     assert(manifest.schemaVersion === 2);
-    assertEquals(manifest.mediaType, MEDIATYPE_MANIFEST_V2);
-    assert(manifest.mediaType === MEDIATYPE_MANIFEST_V2);
-    assert(manifest.config.digest);
-    assert(manifest.layers[0].digest);
+    assertEquals(manifest.mediaType, MEDIATYPE_OCI_MANIFEST_INDEX_V1);
+    assert(manifest.mediaType === MEDIATYPE_OCI_MANIFEST_INDEX_V1);
+    assert(manifest.manifests[0].digest);
 });
 
-/*
-    * {
-    *   "schemaVersion": 2,
-    *   "mediaType": "application/vnd.docker.dis...ion.manifest.list.v2+json",
-    *   "manifests": [
-    *     {
-    *       "mediaType": "application/vnd.docker.dis...ion.manifest.v2+json",
-    *       "size": 528,
-    *       "digest": "sha256:4b920400cf4c9...29ab9dd64eaa652837cd39c2cdf",
-    *       "platform": {
-    *         "architecture": "amd64",
-    *         "os": "linux"
-    *       }
-    *     }
-    *   ]
-    * }
-    */
-let _manifest: ManifestV2 | null;
+let _manifest: ManifestOCIIndex | null;
 let _manifestDigest: string | null;
-Deno.test('v2 docker.io / getManifest (v2.2 list)', async () => {
-    const client = new RegistryClientV2({ repo });
-    var getOpts = {
-        acceptManifestLists: true,
-        ref: TAG
-    };
-    const {manifest} = await client.getManifest(getOpts);
-    assert(manifest);
-    assertEquals(manifest.schemaVersion, 2);
-    assert(manifest.schemaVersion === 2);
-    assertEquals(manifest.mediaType, MEDIATYPE_MANIFEST_LIST_V2,
-        'mediaType should be manifest list');
-    assert(manifest.mediaType === MEDIATYPE_MANIFEST_LIST_V2);
-    assert(Array.isArray(manifest.manifests), 'manifests is an array');
-    manifest.manifests.forEach(function (m) {
-        assert(m.digest, 'm.digest');
-        assert(m.platform, 'm.platform');
-        assert(m.platform.architecture, 'm.platform.architecture');
-        assert(m.platform.os, 'os.platform.os');
-    });
-    // Take the first manifest (for testing purposes).
-    _manifestDigest = manifest.manifests[0].digest;
-});
 
 /*
     * {
@@ -149,20 +108,16 @@ Deno.test('v2 docker.io / getManifest (v2.2)', async () => {
     assert(manifest);
     assertEquals(manifest.schemaVersion, 2);
     assert(manifest.schemaVersion === 2);
-    assert(manifest.mediaType === MEDIATYPE_MANIFEST_V2);
+    assert(manifest.mediaType === MEDIATYPE_OCI_MANIFEST_INDEX_V1);
     _manifest = manifest;
-    assert(manifest.config);
-    assert(manifest.config.digest, manifest.config.digest);
-    assert(manifest.layers);
-    assert(manifest.layers.length > 0);
-    assert(manifest.layers[0].digest);
+    _manifestDigest = resp.headers.get('docker-content-digest');
+    assert(manifest.mediaType);
+    assert(manifest.manifests);
+    assert(manifest.manifests.length > 0);
 
     const manifestStr = new TextDecoder().decode(await resp.dockerBody());
     const computedDigest = digestFromManifestStr(manifestStr);
-    assertEquals(computedDigest, _manifestDigest,
-        'compare computedDigest to expected manifest digest');
-    // Note that res.headers['docker-content-digest'] may be incorrect,
-    // c.f. https://github.com/docker/distribution/issues/2395
+    assertEquals(computedDigest, _manifestDigest);
 });
 
 /*
@@ -176,9 +131,8 @@ Deno.test('v2 docker.io / getManifest (by digest)', async () => {
     assert(manifest, 'Got the manifest object');
     assertEquals(_manifest!.schemaVersion, manifest.schemaVersion);
     assert(manifest.schemaVersion === 2);
-    assert(manifest.mediaType === MEDIATYPE_MANIFEST_V2);
-    assertEquals(_manifest!.config, manifest.config);
-    assertEquals(_manifest!.layers, manifest.layers);
+    assert(manifest.mediaType === MEDIATYPE_OCI_MANIFEST_INDEX_V1);
+    assertEquals(_manifest!.manifests, manifest.manifests);
 });
 
 Deno.test('v2 docker.io / getManifest (unknown tag)', async () => {
@@ -211,7 +165,12 @@ Deno.test('v2 docker.io / getManifest (bad username/password)', async () => {
 Deno.test('v2 docker.io / headBlob', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
     const client = new RegistryClientV2({ repo });
-    var digest = getFirstLayerDigestFromManifest(_manifest);
+
+    const firstImageManifest = await client.getManifest({
+        ref: _manifest.manifests[0].digest,
+    }).then(x => x.manifest);
+    var digest = getFirstLayerDigestFromManifest(firstImageManifest);
+
     const ress = await client.headBlob({digest: digest});
     assert(ress, 'got a "ress"');
     assert(Array.isArray(ress), '"ress" is an array');
@@ -247,7 +206,12 @@ Deno.test('v2 docker.io / headBlob (unknown digest)', async () => {
 Deno.test('v2 docker.io / createBlobReadStream', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
     const client = new RegistryClientV2({ repo });
-    const digest = getFirstLayerDigestFromManifest(_manifest);
+
+    const firstImageManifest = await client.getManifest({
+        ref: _manifest.manifests[0].digest,
+    }).then(x => x.manifest);
+    var digest = getFirstLayerDigestFromManifest(firstImageManifest);
+
     const {ress, stream} = await client.createBlobReadStream({digest: digest});
     assert(ress, 'got responses');
     assert(Array.isArray(ress), 'ress is an array');

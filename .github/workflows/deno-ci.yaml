@@ -13,10 +13,8 @@ jobs:
     strategy:
       matrix:
         deno-version:
-        - v1.17
-        - v1.18
-        - v1.19
-        - v1.20
+        - v2.0
+        - v2.1
         - canary
       fail-fast: false # run each branch to completion
 
@@ -34,12 +32,15 @@ jobs:
     - name: Cache https://
       uses: actions/cache@v3
       with:
-        path: ~/.cache/deno/deps/https
-        key: deno-https/v1-${{ github.sha }}
-        restore-keys: deno-https/v1-
+        path: |
+          ~/.cache/deno/remote/https
+          ~/.cache/deno/gen/https
+        key: deno-https/v2-${{ github.sha }}
+        restore-keys: deno-https/v2-
+
 
     - name: Check index.ts
-      run: time deno cache ./lib/index.ts
+      run: time deno check ./lib/index.ts
 
     - name: Run examples/v2/ping.ts
       run: time ./examples/v2/ping.ts docker.io

@@ -266,7 +266,8 @@ export function digestFromManifestStr(manifestStr: string): string {
     var manifest;
     try {
         manifest = JSON.parse(manifestStr);
-    } catch (err) {
+    } catch (thrown) {
+        const err = thrown as Error;
         throw new Error(`could not parse manifest: ${err.message}\n${manifestStr}`);
     }
     if (manifest.schemaVersion === 1) {
@@ -553,7 +554,8 @@ export class RegistryClientV2 {
         let res;
         try {
             res = await this.ping();
-        } catch (err) {
+        } catch (thrown) {
+            const err = thrown as Error & {resp?: Response};
             if (err.resp) return false;
             throw err;
         }

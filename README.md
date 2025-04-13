@@ -1,8 +1,11 @@
 ![Deno CI](https://github.com/cloudydeno/deno-docker_registry_client/workflows/CI/badge.svg?branch=main)
 
-# Deno `/x/docker_registry_client`
+# JSR module: `@cloudydeno/docker-registry-client`
 
-A port of a Docker Registry API V2 client.
+A Deno-oriented port of an old-fashioned Docker Registry API V2 client.
+
+* [Published on JSR](https://jsr.io/@cloudydeno/docker-registry-client).
+* Last version published to `/x/` is https://deno.land/x/docker_registry_client@v0.5.0
 
 ## Usage
 

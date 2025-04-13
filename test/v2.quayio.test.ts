@@ -21,11 +21,11 @@ import { ManifestV2 } from "../lib/types.ts";
 
 // --- globals
 
-const REPO = 'quay.io/coreos/etcd';
+const REPO = 'quay.io/coreos/kube-state-metrics';
 const repo = parseRepo(REPO);
 // Note: Not using TAG='latest' as a workaround for
 // <https://github.com/joyent/node-docker-registry-client/issues/12>.
-const TAG = 'v3.5.0';
+const TAG = 'v1.9.7';
 
 // --- Tests
 

@@ -27,7 +27,7 @@ const {opts, args} = mainline({
         help: 'Accept OCI manifests (helm charts, etc) from the registry',
     }],
 });
-var name = args[0];
+const name = args[0];
 if (!name) {
     console.error('usage: node examples/v2/%s.js REPO[:TAG|@DIGEST]\n');
     Deno.exit(2);
@@ -35,8 +35,8 @@ if (!name) {
 
 
 // The interesting stuff starts here.
-var rar = parseRepoAndRef(name);
-var client = new RegistryClientV2({
+const rar = parseRepoAndRef(name);
+const client = new RegistryClientV2({
     repo: rar,
     // log: log,
     insecure: opts.insecure,
@@ -44,7 +44,7 @@ var client = new RegistryClientV2({
     password: opts.password,
     acceptOCIManifests: opts['accept-oci'],
 });
-var tagOrDigest = rar.tag || rar.digest || '';
+const tagOrDigest = rar.tag || rar.digest || '';
 const {resp, manifest} = await client.getManifest({
     ref: tagOrDigest,
     acceptManifestLists: opts['accept-list'],

@@ -15,7 +15,7 @@
  * the manifest and all layers to files in the current directory.
  */
 
-import { MultiProgressBar } from "https://deno.land/x/progress@v1.2.3/mod.ts";
+import { MultiProgressBar } from "jsr:@deno-library/progress@1.5.1";
 
 import { mainline } from "../mainline.ts";
 import { parseRepoAndRef } from "../../lib/common.ts";
@@ -92,8 +92,9 @@ for (const task of tasks) {
         }
 
         const file = await Deno.create(task.filename);
+        const writer = file.writable.getWriter();
         for await (const buf of stream) {
-            await Deno.writeAll(file, buf);
+            await writer.write(buf);
 
             task.completed += buf.byteLength;
             if (task.completed > task.total) {
@@ -121,15 +122,10 @@ function getLayersFromManifest(manifest: Manifest): Array<{
     digest: string;
     size?: number;
 }> {
-    if (manifest.schemaVersion === 1) {
-        return manifest.fsLayers.map(layer => ({digest: layer.blobSum})).reverse();
-    }
-    if (manifest.schemaVersion === 2) {
-        if (manifest.mediaType === 'application/vnd.docker.distribution.manifest.list.v2+json') throw new Error(`Got a manifest list for some reason`);
-        return manifest.layers.map(layer => ({
-            digest: layer.digest,
-            size: layer.size,
-        }));
-    }
-    return [];
+    if (manifest.schemaVersion !== 2) return [];
+    if (manifest.mediaType === 'application/vnd.docker.distribution.manifest.list.v2+json') throw new Error(`Got a manifest list for some reason`);
+    return manifest.layers.map(layer => ({
+        digest: layer.digest,
+        size: layer.size,
+    }));
 }

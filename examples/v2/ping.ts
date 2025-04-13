@@ -21,7 +21,7 @@ if (opts.help) {
 }
 
 // `docker login` defaults to this URL. Let's do the same.
-var indexName = args[0] || 'https://index.docker.io/v1/';
+const indexName = args[0] || 'https://index.docker.io/v1/';
 
 // The interesting stuff starts here.
 const client = new RegistryClientV2({

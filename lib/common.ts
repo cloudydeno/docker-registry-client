@@ -23,14 +23,12 @@ export const MEDIATYPE_OCI_MANIFEST_INDEX_V1
 // --- globals
 
 // var VERSION = require('../package.json').version;
-// var DEFAULT_USERAGENT = 'node-docker-registry-client/' + VERSION +
-//     ' (' + os.arch() + '-' + os.platform() + '; ' +
-//    'node/' + process.versions.node + ')';
-const innerBits = [`deno/${Deno.version.deno}`];
+import jsr from '../jsr.json' with {type: 'json'};
+const innerBits = [`Deno/${Deno.version.deno}`];
 if (import.meta.url.startsWith('http')) {
     innerBits.unshift(`+${import.meta.url}`);
 }
-export const DEFAULT_USERAGENT = `deno-docker_registry_client/0.1.0 (${innerBits.join(', ')})`;
+export const DEFAULT_USERAGENT: string = `deno-${jsr.name.replaceAll('/', '-')}/${jsr.version} (${innerBits.join(', ')})` ;
 
 // See `INDEXNAME` in docker/docker.git:registry/config.go.
 export const DEFAULT_INDEX_NAME = 'docker.io';

@@ -1,0 +1,18 @@
+{
+  "name": "@cloudydeno/docker-registry-client",
+  "version": "0.6.0",
+  "license": "MPL",
+  "exports": {
+    "./common": "./lib/common.ts",
+    "./docker-json-client": "./lib/docker-json-client.ts",
+    "./registry-client-v2": "./lib/registry-client-v2.ts",
+    "./types": "./lib/types.ts",
+    ".": "./lib/index.ts"
+  },
+  "publish": {
+    "exclude": [
+      ".github",
+      ".gitignore"
+    ]
+  }
+}

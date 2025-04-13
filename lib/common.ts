@@ -49,7 +49,7 @@ const VALID_REPO = /^[a-z0-9_\/\.-]*$/;
 
 // --- exports
 
-export function splitIntoTwo(str: string, sep: string) {
+export function splitIntoTwo(str: string, sep: string): [string] | [string,string] {
     const slashIdx = str.indexOf(sep)
     return slashIdx == -1
         ? [str]
@@ -328,7 +328,7 @@ export const parseRepoAndTag = parseRepoAndRef;
 /**
  * Similar in spirit to docker.git:registry/endpoint.go#NewEndpoint().
  */
-export function urlFromIndex(index: RegistryIndex, scheme?: 'http' | 'https') {
+export function urlFromIndex(index: RegistryIndex, scheme?: 'http' | 'https'): string {
     if (index.official) {  // v1
         if (scheme != null && scheme !== 'https') throw new Error(
             `Unencrypted communication with docker.io is not allowed`);
@@ -341,7 +341,7 @@ export function urlFromIndex(index: RegistryIndex, scheme?: 'http' | 'https') {
 }
 
 
-export function isLocalhost(host: string) {
+export function isLocalhost(host: string): boolean {
     var lead = host.split(':')[0];
     if (lead === 'localhost' || lead === '127.0.0.1' || host.includes('::1')) {
         return true;

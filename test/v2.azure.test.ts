@@ -104,7 +104,7 @@ Deno.test('v2 mcr.microsoft.com / getManifest (v2.2)', async () => {
     assert(manifest.layers[0].digest);
 
     const manifestStr = new TextDecoder().decode(await resp.dockerBody());
-    const computedDigest = digestFromManifestStr(manifestStr);
+    const computedDigest = await digestFromManifestStr(manifestStr);
     assertEquals(computedDigest, _manifestDigest,
         'compare computedDigest to expected manifest digest');
     // Note that res.headers['docker-content-digest'] may be incorrect,

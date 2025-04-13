@@ -116,7 +116,7 @@ Deno.test('v2 docker.io / getManifest (v2.2)', async () => {
     assert(manifest.manifests.length > 0);
 
     const manifestStr = new TextDecoder().decode(await resp.dockerBody());
-    const computedDigest = digestFromManifestStr(manifestStr);
+    const computedDigest = await digestFromManifestStr(manifestStr);
     assertEquals(computedDigest, _manifestDigest);
 });
 

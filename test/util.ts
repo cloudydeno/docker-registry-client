@@ -42,22 +42,19 @@ export function getFirstLayerDigestFromManifest(manifest: Manifest) {
   return manifest.layers![0].digest;
 }
 
+function bytesToHex(data: ArrayBuffer) {
+  return [...new Uint8Array(data)]
+    .map(x => x.toString(16).padStart(2, '0'))
+    .join('');
+}
 export async function hashAndCount(
   digestType: string,
   stream: ReadableStream<Uint8Array>,
 ) {
   assertEquals(digestType, 'sha256');
-
-  let numBytes = 0;
-  const hash = new Sha256();
-
-  for await (const chunk of stream) {
-    hash.update(chunk);
-    numBytes += chunk.length;
-  }
-
+  const body = await new Response(stream).arrayBuffer();
   return {
-    hashHex: hash.hex(),
-    numBytes,
+    hashHex: bytesToHex(await crypto.subtle.digest("SHA-256", body)),
+    numBytes: body.byteLength,
   };
 }

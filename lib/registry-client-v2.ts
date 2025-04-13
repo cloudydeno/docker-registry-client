@@ -4,8 +4,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import { Sha256 } from "https://deno.land/std@0.130.0/hash/sha256.ts";
-
 import {
     parseRepo,
     urlFromIndex,
@@ -26,6 +24,13 @@ import {
 import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
 import * as e from "./errors.ts";
+
+import { crypto } from "jsr:@std/crypto@1.0.4";
+function encodeHex(data: ArrayBuffer) {
+  return [...new Uint8Array(data)]
+    .map(x => x.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 /*
  * Copyright 2017 Joyent, Inc.
@@ -222,33 +227,32 @@ function _parseDockerContentDigest(dcd: string) {
     const errPre = `could not parse Docker-Content-Digest header "${dcd}": `;
 
     // E.g. docker-content-digest: sha256:887f7ecfd0bda3...
-    var parts = splitIntoTwo(dcd, ':');
+    const parts = splitIntoTwo(dcd, ':');
     if (parts.length !== 2) throw new e.BadDigestError(
         errPre + JSON.stringify(dcd));
     if (parts[0] !== 'sha256') throw new e.BadDigestError(
         errPre + 'Unsupported hash algorithm ' + JSON.stringify(parts[0]));
 
+
+
     return {
         raw: dcd,
         algorithm: parts[0],
         expectedDigest: parts[1],
-        startHash() { switch (this.algorithm) {
-            case 'sha256': return new Sha256();
+        async runHash(inStream: ReadableStream<Uint8Array>) { switch (this.algorithm) {
+            case 'sha256': return await crypto.subtle.digest("SHA-256", inStream);
             default: throw new e.BadDigestError(`Unsupported hash algorithm ${this.algorithm}`);
         } },
-        get validationStream() {
-            const hash = this.startHash();
-            return new TransformStream<Uint8Array,Uint8Array>({
-                transform: (chunk, controller) => {
-                    hash.update(chunk);
-                    controller.enqueue(chunk);
-                },
-                flush: (controller) => {
-                    const digest = hash.hex();
+        validateStream(inStream: ReadableStream<Uint8Array>) {
+            const [passthru, hashStream] = inStream.tee();
+            const hashPromise = this.runHash(hashStream);
+            return passthru.pipeThrough(new TransformStream({
+                flush: async (ctlr) => {
+                    const digest = encodeHex(await hashPromise);
                     if (this.expectedDigest === digest) return;
-                    controller.error(new e.BadDigestError(`Docker-Content-Digest (${this.expectedDigest} vs ${digest})`));
+                    ctlr.error(new e.BadDigestError(`Docker-Content-Digest (${this.expectedDigest} vs ${digest})`));
                 },
-            })
+            }));
         }
     };
 }
@@ -768,9 +772,8 @@ export class RegistryClientV2 {
                     `given digest, ${opts.digest}`);
             }
 
-            stream = stream.pipeThrough(dcdInfo.validationStream);
-        } else {
-            // stream.log.debug({headers: ress[0].headers},
+
+            stream = dcdInfo.validateStream(stream);
         }
 
         return { ress, stream };

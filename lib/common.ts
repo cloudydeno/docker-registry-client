@@ -23,14 +23,12 @@ export const MEDIATYPE_OCI_MANIFEST_INDEX_V1
 // --- globals
 
 // var VERSION = require('../package.json').version;
-// var DEFAULT_USERAGENT = 'node-docker-registry-client/' + VERSION +
-//     ' (' + os.arch() + '-' + os.platform() + '; ' +
-//    'node/' + process.versions.node + ')';
-const innerBits = [`deno/${Deno.version.deno}`];
+import jsr from '../jsr.json' with {type: 'json'};
+const innerBits = [`Deno/${Deno.version.deno}`];
 if (import.meta.url.startsWith('http')) {
     innerBits.unshift(`+${import.meta.url}`);
 }
-export const DEFAULT_USERAGENT = `deno-docker_registry_client/0.1.0 (${innerBits.join(', ')})`;
+export const DEFAULT_USERAGENT: string = `deno-${jsr.name.replaceAll('/', '-')}/${jsr.version} (${innerBits.join(', ')})` ;
 
 // See `INDEXNAME` in docker/docker.git:registry/config.go.
 export const DEFAULT_INDEX_NAME = 'docker.io';
@@ -49,7 +47,7 @@ const VALID_REPO = /^[a-z0-9_\/\.-]*$/;
 
 // --- exports
 
-export function splitIntoTwo(str: string, sep: string) {
+export function splitIntoTwo(str: string, sep: string): [string] | [string,string] {
     const slashIdx = str.indexOf(sep)
     return slashIdx == -1
         ? [str]
@@ -171,19 +169,19 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex): R
     // Strip off optional leading `INDEX/`, parse it to `info.index` and
     // leave the rest in `remoteName`.
     let remoteNameRaw: string;
-    var protoSepIdx = arg.indexOf('://');
+    const protoSepIdx = arg.indexOf('://');
     if (protoSepIdx !== -1) {
         // (A) repo with a protocol, e.g. 'https://host/repo'.
-        var slashIdx = arg.indexOf('/', protoSepIdx + 3);
+        const slashIdx = arg.indexOf('/', protoSepIdx + 3);
         if (slashIdx === -1) {
             throw new Error('invalid repository name, no "/REPO" after ' +
                 'hostame: ' + arg);
         }
-        var indexName = arg.slice(0, slashIdx);
+        const indexName = arg.slice(0, slashIdx);
         remoteNameRaw = arg.slice(slashIdx + 1);
         index = parseIndex(indexName);
     } else {
-        var parts = splitIntoTwo(arg, '/');
+        const parts = splitIntoTwo(arg, '/');
         if (parts.length === 1 || (
             /* or if parts[0] doesn't look like a hostname or IP */
             parts[0].indexOf('.') === -1 &&
@@ -207,7 +205,7 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex): R
     }
 
     // Validate remoteName (docker `validateRemoteName`).
-    var nameParts = splitIntoTwo(remoteNameRaw, '/');
+    const nameParts = splitIntoTwo(remoteNameRaw, '/');
     let ns = '', name: string;
     if (nameParts.length === 2) {
         name = nameParts[1];
@@ -243,22 +241,18 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex): R
             '[a-z0-9_/.-] characters: ' + name);
     }
 
-    let official = index.official && ns === 'library';
+    const isLibrary = index.official && ns === 'library';
     const remoteName = ns ? `${ns}/${name}` : name;
-    let localName: string;
-    let canonicalName: string;
-
-    if (index.official) {
-        localName = official ? name : remoteName;
-        canonicalName = DEFAULT_INDEX_NAME + '/' + localName;
-    } else {
-        localName = index.name + '/' + remoteName;
-        canonicalName = localName;
-    }
+    const localName = index.official
+        ? (isLibrary ? name : remoteName)
+        : `${index.name}/${remoteName}`;
+    const canonicalName = index.official
+        ? `${DEFAULT_INDEX_NAME}/${localName}`
+        : localName;
 
     return {
         index,
-        official,
+        official: isLibrary,
         remoteName,
         localName,
         canonicalName,
@@ -328,7 +322,7 @@ export const parseRepoAndTag = parseRepoAndRef;
 /**
  * Similar in spirit to docker.git:registry/endpoint.go#NewEndpoint().
  */
-export function urlFromIndex(index: RegistryIndex, scheme?: 'http' | 'https') {
+export function urlFromIndex(index: RegistryIndex, scheme?: 'http' | 'https'): string {
     if (index.official) {  // v1
         if (scheme != null && scheme !== 'https') throw new Error(
             `Unencrypted communication with docker.io is not allowed`);
@@ -341,8 +335,8 @@ export function urlFromIndex(index: RegistryIndex, scheme?: 'http' | 'https') {
 }
 
 
-export function isLocalhost(host: string) {
-    var lead = host.split(':')[0];
+export function isLocalhost(host: string): boolean {
+    const lead = host.split(':')[0];
     if (lead === 'localhost' || lead === '127.0.0.1' || host.includes('::1')) {
         return true;
     } else {

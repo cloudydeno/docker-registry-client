@@ -116,7 +116,7 @@ Deno.test('v2 docker.io / getManifest (v2.2)', async () => {
     assert(manifest.manifests.length > 0);
 
     const manifestStr = new TextDecoder().decode(await resp.dockerBody());
-    const computedDigest = digestFromManifestStr(manifestStr);
+    const computedDigest = await digestFromManifestStr(manifestStr);
     assertEquals(computedDigest, _manifestDigest);
 });
 
@@ -169,12 +169,12 @@ Deno.test('v2 docker.io / headBlob', async () => {
     const firstImageManifest = await client.getManifest({
         ref: _manifest.manifests[0].digest,
     }).then(x => x.manifest);
-    var digest = getFirstLayerDigestFromManifest(firstImageManifest);
+    const digest = getFirstLayerDigestFromManifest(firstImageManifest);
 
     const ress = await client.headBlob({digest: digest});
     assert(ress, 'got a "ress"');
     assert(Array.isArray(ress), '"ress" is an array');
-    var first = ress[0];
+    const first = ress[0];
     assert(first.status === 200 || first.status === 307,
         'first response statusCode is 200 or 307');
     if (first.headers.get('docker-content-digest')) {
@@ -185,9 +185,9 @@ Deno.test('v2 docker.io / headBlob', async () => {
     assertEquals(first.headers.get('docker-distribution-api-version'),
         'registry/2.0',
         '"docker-distribution-api-version" header is "registry/2.0"');
-    var last = ress[ress.length - 1];
+    const last = ress[ress.length - 1];
     assertEquals(last.status, 200, 'last response statusCode is 200');
-    var contentType = last.headers.get('content-type');
+    const contentType = last.headers.get('content-type');
     assert(['application/octet-stream', 'application/x-gzip']
         .indexOf(contentType ?? '') !== -1,
         'content-type is as expected, got ' + contentType);
@@ -210,7 +210,7 @@ Deno.test('v2 docker.io / createBlobReadStream', async () => {
     const firstImageManifest = await client.getManifest({
         ref: _manifest.manifests[0].digest,
     }).then(x => x.manifest);
-    var digest = getFirstLayerDigestFromManifest(firstImageManifest);
+    const digest = getFirstLayerDigestFromManifest(firstImageManifest);
 
     const {ress, stream} = await client.createBlobReadStream({digest: digest});
     assert(ress, 'got responses');

@@ -16,7 +16,7 @@ import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
 
 // Shared mainline with examples/foo.js to get CLI opts.
 const {opts, args} = mainline({cmd: 'headBlob'});
-var name = args[0];
+const name = args[0];
 if (!name) {
     console.error('usage: node examples/v2/%s.js REPO@DIGEST');
     Deno.exit(2);
@@ -24,16 +24,16 @@ if (!name) {
 
 
 // The interesting stuff starts here.
-var rat = parseRepoAndRef(name);
+const rat = parseRepoAndRef(name);
 if (!rat.digest) throw new Error('must specify a @DIGEST');
-var client = new RegistryClientV2({
+const client = new RegistryClientV2({
     repo: rat,
     insecure: opts.insecure,
     username: opts.username,
     password: opts.password
 });
 const ress = await client.headBlob({digest: rat.digest});
-for (var i = 0; i < ress.length; i++) {
+for (let i = 0; i < ress.length; i++) {
     console.log('# response %d headers', i+1);
     console.table(Array.from(ress[i].headers));
 }

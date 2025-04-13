@@ -13,8 +13,8 @@ import { digestFromManifestStr } from "../lib/registry-client-v2.ts";
 
 // --- Tests
 
-Deno.test('digestFromManifestStr', () => {
-    var v2Manifest = {
+Deno.test('digestFromManifestStr', async () => {
+    const v2Manifest = {
         'schemaVersion': 2,
         'mediaType': 'application/vnd.docker.distribution.manifest.v2+json',
         'config': {
@@ -45,7 +45,7 @@ Deno.test('digestFromManifestStr', () => {
             }
         ]
     };
-    var v2ManifestStr = JSON.stringify(v2Manifest);
-    var v2Digest = digestFromManifestStr(v2ManifestStr);
+    const v2ManifestStr = JSON.stringify(v2Manifest);
+    const v2Digest = await digestFromManifestStr(v2ManifestStr);
     assertEquals(v2Digest, 'sha256:28a63cc341ad4ad7ba7de0af4061ca8068e425ecca4e2c4c326dd8d07442ab71');
 });

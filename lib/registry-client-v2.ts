@@ -4,8 +4,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-import { Sha256 } from "https://deno.land/std@0.130.0/hash/sha256.ts";
-
 import {
     parseRepo,
     urlFromIndex,
@@ -26,6 +24,13 @@ import {
 import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
 import * as e from "./errors.ts";
+
+import { crypto } from "jsr:@std/crypto@1.0.4";
+function encodeHex(data: ArrayBuffer) {
+  return [...new Uint8Array(data)]
+    .map(x => x.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 /*
  * Copyright 2017 Joyent, Inc.
@@ -131,20 +136,20 @@ function _makeAuthScope(resource: string, name: string, actions: string[]) {
  * Usage:
  *      var regErr = _getRegistryErrMessage(body));
  */
-function _getRegistryErrMessage(body: any) {
+function _getRegistryErrMessage(body: string | Record<string,unknown> | null | undefined) {
     if (!body) {
         return null;
     }
-    var obj = body;
-    if (typeof (obj) === 'string' && obj.length <= MAX_REGISTRY_ERROR_LENGTH) {
+    const obj = body;
+    if (typeof obj === 'string' && obj.length <= MAX_REGISTRY_ERROR_LENGTH) {
         try {
-            obj = JSON.parse(obj);
-        } catch (ex) {
+            return JSON.parse(obj);
+        } catch {
             // Just return the error as a string.
-            return obj;
+            return obj as string;
         }
     }
-    if (typeof (obj) !== 'object' || !obj.hasOwnProperty('errors')) {
+    if (typeof (obj) !== 'object' || !Object.hasOwnProperty.call(obj, 'errors')) {
         return null;
     }
     if (!Array.isArray(obj.errors)) {
@@ -175,7 +180,7 @@ function _getRegistryErrMessage(body: any) {
 // detailed error msg.
 async function registryError(err: any, res: DockerResponse) {
     // Parse errors in the response body.
-    var message = _getRegistryErrMessage(await res.dockerJson());
+    const message = _getRegistryErrMessage(await res.dockerJson());
     if (message) {
         err.message = message;
     }
@@ -203,7 +208,7 @@ async function registryError(err: any, res: DockerResponse) {
  * example of that.
  */
 function _parseWWWAuthenticate(header: string) {
-    var parsed = new Parse_WWW_Authenticate(header);
+    const parsed = new Parse_WWW_Authenticate(header);
     if (parsed.err) {
         throw new Error('could not parse WWW-Authenticate header "' + header
             + '": ' + parsed.err);
@@ -222,33 +227,32 @@ function _parseDockerContentDigest(dcd: string) {
     const errPre = `could not parse Docker-Content-Digest header "${dcd}": `;
 
     // E.g. docker-content-digest: sha256:887f7ecfd0bda3...
-    var parts = splitIntoTwo(dcd, ':');
+    const parts = splitIntoTwo(dcd, ':');
     if (parts.length !== 2) throw new e.BadDigestError(
         errPre + JSON.stringify(dcd));
     if (parts[0] !== 'sha256') throw new e.BadDigestError(
         errPre + 'Unsupported hash algorithm ' + JSON.stringify(parts[0]));
 
+
+
     return {
         raw: dcd,
         algorithm: parts[0],
         expectedDigest: parts[1],
-        startHash() { switch (this.algorithm) {
-            case 'sha256': return new Sha256();
+        async runHash(inStream: ReadableStream<Uint8Array>) { switch (this.algorithm) {
+            case 'sha256': return await crypto.subtle.digest("SHA-256", inStream);
             default: throw new e.BadDigestError(`Unsupported hash algorithm ${this.algorithm}`);
         } },
-        get validationStream() {
-            const hash = this.startHash();
-            return new TransformStream<Uint8Array,Uint8Array>({
-                transform: (chunk, controller) => {
-                    hash.update(chunk);
-                    controller.enqueue(chunk);
-                },
-                flush: (controller) => {
-                    const digest = hash.hex();
+        validateStream(inStream: ReadableStream<Uint8Array>) {
+            const [passthru, hashStream] = inStream.tee();
+            const hashPromise = this.runHash(hashStream);
+            return passthru.pipeThrough(new TransformStream({
+                flush: async (ctlr) => {
+                    const digest = encodeHex(await hashPromise);
                     if (this.expectedDigest === digest) return;
-                    controller.error(new e.BadDigestError(`Docker-Content-Digest (${this.expectedDigest} vs ${digest})`));
+                    ctlr.error(new e.BadDigestError(`Docker-Content-Digest (${this.expectedDigest} vs ${digest})`));
                 },
-            })
+            }));
         }
     };
 }
@@ -256,14 +260,11 @@ function _parseDockerContentDigest(dcd: string) {
 /**
  * Calculate the 'Docker-Content-Digest' header for the given manifest.
  *
- * @returns {String} The docker digest string.
+ * @returns {Promise<String>} The docker digest string.
  * @throws {InvalidContentError} if there is a problem parsing the manifest.
  */
-export function digestFromManifestStr(manifestStr: string): string {
-    var hash = new Sha256();
-    var digestPrefix = 'sha256:';
-
-    var manifest;
+export async function digestFromManifestStr(manifestStr: string): Promise<string> {
+    let manifest: Manifest | {schemaVersion: 1};
     try {
         manifest = JSON.parse(manifestStr);
     } catch (thrown) {
@@ -273,8 +274,9 @@ export function digestFromManifestStr(manifestStr: string): string {
     if (manifest.schemaVersion === 1) {
         throw new Error(`schemaVersion 1 is not supported by /x/docker_registry_client.`);
     }
-    hash.update(manifestStr);
-    return digestPrefix + hash.hex();
+
+    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(manifestStr));
+    return `sha256:${encodeHex(hash)}`;
 }
 
 
@@ -368,7 +370,7 @@ export class RegistryClientV2 {
     async ping(opts: {
         headers?: Headers,
         expectStatus?: number[],
-    } = {}) {
+    } = {}): Promise<DockerResponse> {
         const resp = await this._api.request({
             method: 'GET',
             path: '/v2/',
@@ -451,8 +453,8 @@ export class RegistryClientV2 {
         scopes?: string[];
     }): Promise<string> {
         // - add https:// prefix (or http) if none on 'realm'
-        var tokenUrl = opts.realm;
-        var match = /^(\w+):\/\//.exec(tokenUrl);
+        let tokenUrl = opts.realm;
+        const match = /^(\w+):\/\//.exec(tokenUrl);
         if (!match) {
             tokenUrl = (this.insecure ? 'http' : 'https') + '://' + tokenUrl;
         } else if (['http', 'https'].indexOf(match[1]) === -1) {
@@ -465,8 +467,8 @@ export class RegistryClientV2 {
         //      (&scope=$scope)*
         //      (&account=$username)
         //   Authorization: Basic ...
-        var headers = new Headers;
-        var query = new URLSearchParams;
+        const headers = new Headers;
+        const query = new URLSearchParams;
         if (opts.service) {
             query.set('service', opts.service);
         }
@@ -497,11 +499,11 @@ export class RegistryClientV2 {
         if (resp.status === 401) {
             // Convert *all* 401 errors to use a generic error constructor
             // with a simple error message.
-            var errMsg = _getRegistryErrorMessage(await resp.dockerJson());
+            const errMsg = _getRegistryErrorMessage(await resp.dockerJson());
             throw await resp.dockerThrowable('Registry auth failed: '+errMsg);
         }
         const body = await resp.dockerJson();
-        if (typeof body.token !== 'string') {
+        if (typeof body?.token !== 'string') {
             console.error('TODO: auth resp:', body);
             throw await resp.dockerThrowable('authorization ' +
                 'server did not include a token in the response');
@@ -528,8 +530,8 @@ export class RegistryClientV2 {
     async login(opts: {
         pingRes?: DockerResponse;
         scope?: string;
-    } = {}) {
-        var scope = opts.scope || _makeAuthScope('repository', this.repo.remoteName, this.scopes);
+    } = {}): Promise<void> {
+        const scope = opts.scope || _makeAuthScope('repository', this.repo.remoteName, this.scopes);
 
         if (this._loggedIn && this._loggedInScope === scope) {
             return;
@@ -550,8 +552,8 @@ export class RegistryClientV2 {
      * Determine if this registry supports the v2 API.
      * https://docs.docker.com/registry/spec/api/#api-version-check
      */
-    async supportsV2() {
-        let res;
+    async supportsV2(): Promise<boolean> {
+        let res: DockerResponse;
         try {
             res = await this.ping();
         } catch (thrown) {
@@ -560,9 +562,9 @@ export class RegistryClientV2 {
             throw err;
         }
 
-        var header = res.headers.get('docker-distribution-api-version');
+        const header = res.headers.get('docker-distribution-api-version');
         if (header) {
-            var versions = header.split(/[\s,]+/g);
+            const versions = header.split(/[\s,]+/g);
             if (versions.includes('registry/2.0')) {
                 return true;
             }
@@ -579,7 +581,7 @@ export class RegistryClientV2 {
             headers: this._headers,
             redirect: 'follow',
         });
-        return await res.dockerJson();
+        return await res.dockerJson<TagList>();
     };
 
     /*
@@ -594,14 +596,17 @@ export class RegistryClientV2 {
         acceptManifestLists?: boolean;
         acceptOCIManifests?: boolean;
         followRedirects?: boolean;
-    }) {
-        var acceptOCIManifests = opts.acceptOCIManifests
+    }): Promise<{
+        resp: DockerResponse;
+        manifest: Manifest;
+    }> {
+        const acceptOCIManifests = opts.acceptOCIManifests
             ?? this.acceptOCIManifests;
-        var acceptManifestLists = opts.acceptManifestLists
+        const acceptManifestLists = opts.acceptManifestLists
             ?? this.acceptManifestLists;
 
         await this.login();
-        var headers = new Headers(this._headers);
+        const headers = new Headers(this._headers);
         headers.append('accept', MEDIATYPE_MANIFEST_V2);
         if (acceptManifestLists) {
             headers.append('accept', MEDIATYPE_MANIFEST_LIST_V2);
@@ -621,11 +626,11 @@ export class RegistryClientV2 {
             expectStatus: [200, 401],
         });
         if (resp.status === 401) {
-            var errMsg = _getRegistryErrorMessage(await resp.dockerJson());
+            const errMsg = _getRegistryErrorMessage(await resp.dockerJson());
             throw await resp.dockerThrowable(`Manifest ${JSON.stringify(opts.ref)} Not Found: ${errMsg}`);
         }
 
-        const manifest: Manifest = await resp.dockerJson();
+        const manifest = await resp.dockerJson<Manifest>();
         if (manifest.schemaVersion as number === 1) {
             throw new Error(`schemaVersion 1 is not supported by /x/docker_registry_client.`);
         }
@@ -660,11 +665,11 @@ export class RegistryClientV2 {
         headers?: Headers,
         followRedirects?: boolean;
         maxRedirects?: number;
-    }) {
+    }): Promise<DockerResponse[]> {
         const followRedirects = opts.followRedirects ?? true;
         const maxRedirects = opts.maxRedirects ?? 3;
         let numRedirs = 0;
-        let req = {
+        const req = {
             path: opts.path,
             headers: opts.headers,
         };
@@ -692,10 +697,8 @@ export class RegistryClientV2 {
 
             const loc = new URL(location, new URL(req.path, this._url));
             // this.log.trace({numRedirs: numRedirs, loc: loc}, 'got redir response');
-            req = {
-                path: loc.toString(),
-                headers: new Headers,
-            };
+            req.path = loc.toString();
+            req.headers = new Headers;
 
             await resp.body?.cancel();
         }
@@ -703,7 +706,7 @@ export class RegistryClientV2 {
         throw new e.TooManyRedirectsError(`maximum number of redirects (${maxRedirects}) hit`);
     };
 
-    async _headOrGetBlob(method: 'GET' | 'HEAD', digest: string) {
+    async _headOrGetBlob(method: 'GET' | 'HEAD', digest: string): Promise<DockerResponse[]> {
         await this.login();
         return await this._makeHttpRequest({
             method: method,
@@ -729,7 +732,7 @@ export class RegistryClientV2 {
     */
     async headBlob(opts: {
         digest: string;
-    }) {
+    }): Promise<DockerResponse[]> {
         const resp = await this._headOrGetBlob('HEAD', opts.digest);
         // consume the final body - since HEADs don't have meaningful bodies
         await resp.slice(-1)[0].body?.cancel();
@@ -751,11 +754,14 @@ export class RegistryClientV2 {
      */
     async createBlobReadStream(opts: {
         digest: string;
-    }) {
+    }): Promise<{
+        ress: DockerResponse[];
+        stream: ReadableStream<Uint8Array>;
+    }> {
         const ress = await this._headOrGetBlob('GET', opts.digest);
         let stream = ress[ress.length - 1].dockerStream();
 
-        var dcdHeader = ress[0].headers.get('docker-content-digest');
+        const dcdHeader = ress[0].headers.get('docker-content-digest');
         if (dcdHeader) {
             const dcdInfo = _parseDockerContentDigest(dcdHeader);
             if (dcdInfo.raw !== opts.digest) {
@@ -764,9 +770,7 @@ export class RegistryClientV2 {
                     `given digest, ${opts.digest}`);
             }
 
-            stream = stream.pipeThrough(dcdInfo.validationStream);
-        } else {
-            // stream.log.debug({headers: ress[0].headers},
+            stream = dcdInfo.validateStream(stream);
         }
 
         return { ress, stream };
@@ -781,7 +785,10 @@ export class RegistryClientV2 {
         ref: string; // or digest
         schemaVersion?: number;
         mediaType?: string;
-    }) {
+    }): Promise<{
+        digest: string | null;
+        location: string | null;
+    }> {
         await this.login({
             scope: _makeAuthScope('repository', this.repo.remoteName, ['pull', 'push']),
         });

@@ -57,8 +57,8 @@ try {
 
 if (CONFIG)
 test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
-    var client;
-    var repo = drc.parseRepo(CONFIG.repo);
+    const client;
+    const repo = drc.parseRepo(CONFIG.repo);
 
     tt.test('  RegistryClientV2', function (t) {
         client = drc.RegistryClientV2({
@@ -108,7 +108,7 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
      * private, i.e. *requires auth*. It'll do that by trying to get starter
      * info *without* auth info. Ensure that doesn't blow up.
      */
-    var noAuthClient;
+    const noAuthClient;
     tt.test('  noAuthClient: setup', function (t) {
         noAuthClient = drc.RegistryClientV2({
             name: CONFIG.repo,
@@ -161,9 +161,9 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
      *   ]
      * }
      */
-    var manifest;
-    var manifestDigest;
-    var manifestStr;
+    const manifest;
+    const manifestDigest;
+    const manifestStr;
     tt.test('  getManifest', function (t) {
         client.getManifest({ref: CONFIG.tag},
                 function (err, manifest_, res, manifestStr_) {
@@ -194,10 +194,10 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
         });
     });
 
-    var v2Manifest;
-    var v2ManifestDigest;
+    const v2Manifest;
+    const v2ManifestDigest;
     tt.test('  getManifest (v2.2)', function (t) {
-        var getOpts = {ref: CONFIG.tag, maxSchemaVersion: 2};
+        const getOpts = {ref: CONFIG.tag, maxSchemaVersion: 2};
         client.getManifest(getOpts, function (err, manifest_, res) {
             t.ifErr(err);
             v2Manifest = manifest_;
@@ -214,7 +214,7 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
     });
 
     tt.test('  getManifest (v2.2 by digest)', function (t) {
-        var opts = {
+        const opts = {
             maxSchemaVersion: 2,
             ref: v2ManifestDigest
         };
@@ -241,12 +241,12 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
     });
 
     tt.test('  headBlob', function (t) {
-        var digest = manifest.layers[0].digest;
+        const digest = manifest.layers[0].digest;
         client.headBlob({digest: digest}, function (err, ress) {
             t.ifErr(err, 'no headBlob err');
             t.ok(ress, 'got a "ress"');
             t.ok(Array.isArray(ress), '"ress" is an array');
-            var first = ress[0];
+            const first = ress[0];
             t.ok(first.statusCode === 200 || first.statusCode === 307,
                 'first response statusCode is 200 or 307');
             if (first.headers['docker-content-digest']) {
@@ -257,9 +257,9 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
             t.equal(first.headers['docker-distribution-api-version'],
                 'registry/2.0',
                 '"docker-distribution-api-version" header is "registry/2.0"');
-            var last = ress[ress.length - 1];
+            const last = ress[ress.length - 1];
             t.equal(last.statusCode, 200, 'last response statusCode is 200');
-            var contentType = last.headers['content-type'];
+            const contentType = last.headers['content-type'];
             t.ok(['application/octet-stream', 'application/x-gzip']
                 .indexOf(contentType) !== -1,
                 'content-type is as expected, got ' + contentType);
@@ -274,7 +274,7 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
             t.ok(ress);
             t.ok(Array.isArray(ress));
             t.equal(ress.length, 1);
-            var res = ress[0];
+            const res = ress[0];
             t.equal(res.statusCode, 404);
             t.equal(res.headers['docker-distribution-api-version'],
                 'registry/2.0');
@@ -283,14 +283,14 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
     });
 
     tt.test('  createBlobReadStream', function (t) {
-        var digest = manifest.layers[0].digest;
+        const digest = manifest.layers[0].digest;
         client.createBlobReadStream({digest: digest},
                 function (err, stream, ress) {
             t.ifErr(err, 'createBlobReadStream err');
 
             t.ok(ress, 'got responses');
             t.ok(Array.isArray(ress), 'ress is an array');
-            var first = ress[0];
+            const first = ress[0];
             t.ok(first.statusCode === 200 || first.statusCode === 307,
                 'createBlobReadStream first res statusCode is 200 or 307');
             if (first.headers['docker-content-digest']) {
@@ -309,8 +309,8 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
                 'got a "content-length" header');
 
 
-            var numBytes = 0;
-            var hash = crypto.createHash(digest.split(':')[0]);
+            const numBytes = 0;
+            const hash = crypto.createHash(digest.split(':')[0]);
             stream.on('data', function (chunk) {
                 hash.update(chunk);
                 numBytes += chunk.length;
@@ -331,7 +331,7 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
             t.ok(ress);
             t.ok(Array.isArray(ress));
             t.equal(ress.length, 1);
-            var res = ress[0];
+            const res = ress[0];
             t.equal(res.statusCode, 404);
             t.equal(res.headers['docker-distribution-api-version'],
                 'registry/2.0');
@@ -340,13 +340,13 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
     });
 
     tt.test('  blobUpload', function (t) {
-        var digest = manifest.layers[0].digest;
+        const digest = manifest.layers[0].digest;
         client.createBlobReadStream({digest: digest},
                 function (err, stream, ress) {
             t.ifErr(err, 'createBlobReadStream err');
 
-            var last = ress[ress.length - 1];
-            var uploadOpts = {
+            const last = ress[ress.length - 1];
+            const uploadOpts = {
                 contentLength: parseInt(last.headers['content-length'], 10),
                 digest: digest,
                 stream: stream
@@ -361,7 +361,7 @@ test('v2 docker.io private repo (' + CONFIG.repo + ')', function (tt) {
     });
 
     tt.test('  putManifest', function (t) {
-        var uploadOpts = {
+        const uploadOpts = {
             contentLength: manifestStr.length,
             manifest: manifestStr,
             ref: 'test_put_manifest'

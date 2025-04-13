@@ -50,8 +50,8 @@ try {
 
 if (CONFIG)
 test('v2 gcr.io private', function (tt) {
-    var client;
-    var repo = drc.parseRepo(CONFIG.repo);
+    const client;
+    const repo = drc.parseRepo(CONFIG.repo);
 
     tt.test('  RegistryClientV2', function (t) {
         client = drc.RegistryClientV2({
@@ -124,10 +124,10 @@ test('v2 gcr.io private', function (tt) {
      *      ]
      *  }
      */
-    var blobDigest;
-    var manifest;
-    var manifestDigest;
-    var manifestStr;
+    const blobDigest;
+    const manifest;
+    const manifestDigest;
+    const manifestStr;
     tt.test('  getManifest', function (t) {
         client.getManifest({ref: CONFIG.tag},
                 function (err, manifest_, res, manifestStr_) {
@@ -176,7 +176,7 @@ test('v2 gcr.io private', function (tt) {
             t.ifErr(err);
             t.ok(ress, 'got responses');
             t.ok(Array.isArray(ress), 'responses is an array');
-            var first = ress[0];
+            const first = ress[0];
 
             // First request statusCode on a redirect:
             // - gcr.io gives 302 (Found)
@@ -194,7 +194,7 @@ test('v2 gcr.io private', function (tt) {
             t.equal(first.headers['docker-distribution-api-version'],
                 'registry/2.0');
 
-            var last = ress[ress.length - 1];
+            const last = ress[ress.length - 1];
             t.ok(last);
             t.equal(last.statusCode, 200,
                 'last response status code should be 200');
@@ -246,7 +246,7 @@ test('v2 gcr.io private', function (tt) {
 
             t.ok(ress);
             t.ok(Array.isArray(ress));
-            var first = ress[0];
+            const first = ress[0];
             // First request statusCode on a redirect:
             // - gcr.io gives 302 (Found)
             // - docker.io gives 307
@@ -271,8 +271,8 @@ test('v2 gcr.io private', function (tt) {
                 'application/octet-stream');
             t.ok(stream.headers['content-length']);
 
-            var numBytes = 0;
-            var hash = crypto.createHash(blobDigest.split(':')[0]);
+            const numBytes = 0;
+            const hash = crypto.createHash(blobDigest.split(':')[0]);
             stream.on('data', function (chunk) {
                 hash.update(chunk);
                 numBytes += chunk.length;
@@ -316,8 +316,8 @@ test('v2 gcr.io private', function (tt) {
                 function (err, stream, ress) {
             t.ifErr(err, 'createBlobReadStream err');
 
-            var last = ress[ress.length - 1];
-            var uploadOpts = {
+            const last = ress[ress.length - 1];
+            const uploadOpts = {
                 contentLength: parseInt(last.headers['content-length'], 10),
                 digest: blobDigest,
                 stream: stream
@@ -332,7 +332,7 @@ test('v2 gcr.io private', function (tt) {
     });
 
     tt.test('  putManifest', function (t) {
-        var uploadOpts = {
+        const uploadOpts = {
             contentLength: manifestStr.length,
             manifest: manifestStr,
             ref: 'test_put_manifest'

@@ -70,8 +70,8 @@ if (CONFIG) {
 
 
 test('v2 private repo ' + idx + ' (' + entry.repo + ')', function (tt) {
-    var client;
-    var repo = drc.parseRepo(entry.repo);
+    const client;
+    const repo = drc.parseRepo(entry.repo);
 
     tt.test('  RegistryClientV2', function (t) {
         client = drc.RegistryClientV2({
@@ -122,7 +122,7 @@ test('v2 private repo ' + idx + ' (' + entry.repo + ')', function (tt) {
      * private, i.e. *requires auth*. It'll do that by trying to get starter
      * info *without* auth info. Ensure that doesn't blow up.
      */
-    var noAuthClient;
+    const noAuthClient;
     tt.test('  noAuthClient: setup', function (t) {
         noAuthClient = drc.RegistryClientV2({
             name: entry.repo,
@@ -171,8 +171,8 @@ test('v2 private repo ' + idx + ' (' + entry.repo + ')', function (tt) {
      *      "signature": <JWS>
      *  }
      */
-    var manifest;
-    var manifestDigest;
+    const manifest;
+    const manifestDigest;
     tt.test('  getManifest', function (t) {
         client.getManifest({ref: entry.tag}, function (err, manifest_, res) {
             t.ifErr(err);
@@ -214,17 +214,17 @@ test('v2 private repo ' + idx + ' (' + entry.repo + ')', function (tt) {
     });
 
     tt.test('  headBlob', function (t) {
-        var digest = manifest.fsLayers[0].blobSum;
+        const digest = manifest.fsLayers[0].blobSum;
         client.headBlob({digest: digest}, function (err, ress) {
             t.ifErr(err);
             t.ok(ress);
             t.ok(Array.isArray(ress));
-            var first = ress[0];
+            const first = ress[0];
             t.ok(first.statusCode === 200 || first.statusCode === 307);
             t.equal(first.headers['docker-content-digest'], digest);
             t.equal(first.headers['docker-distribution-api-version'],
                 'registry/2.0');
-            var last = ress[ress.length - 1];
+            const last = ress[ress.length - 1];
             t.ok(last);
             t.equal(last.statusCode, 200);
             t.equal(last.headers['content-type'], 'application/octet-stream');
@@ -239,7 +239,7 @@ test('v2 private repo ' + idx + ' (' + entry.repo + ')', function (tt) {
             t.ok(ress);
             t.ok(Array.isArray(ress));
             t.equal(ress.length, 1);
-            var res = ress[0];
+            const res = ress[0];
             t.equal(res.statusCode, 404);
             t.equal(res.headers['docker-distribution-api-version'],
                 'registry/2.0');
@@ -248,14 +248,14 @@ test('v2 private repo ' + idx + ' (' + entry.repo + ')', function (tt) {
     });
 
     tt.test('  createBlobReadStream', function (t) {
-        var digest = manifest.fsLayers[0].blobSum;
+        const digest = manifest.fsLayers[0].blobSum;
         client.createBlobReadStream({digest: digest},
                 function (err, stream, ress) {
             t.ifErr(err);
 
             t.ok(ress);
             t.ok(Array.isArray(ress));
-            var first = ress[0];
+            const first = ress[0];
             t.ok(first.statusCode === 200 || first.statusCode === 307);
             t.equal(first.headers['docker-content-digest'], digest);
             t.equal(first.headers['docker-distribution-api-version'],
@@ -266,8 +266,8 @@ test('v2 private repo ' + idx + ' (' + entry.repo + ')', function (tt) {
             t.equal(stream.headers['content-type'], 'application/octet-stream');
             t.ok(stream.headers['content-length']);
 
-            var numBytes = 0;
-            var hash = crypto.createHash(digest.split(':')[0]);
+            const numBytes = 0;
+            const hash = crypto.createHash(digest.split(':')[0]);
             stream.on('data', function (chunk) {
                 hash.update(chunk);
                 numBytes += chunk.length;
@@ -288,7 +288,7 @@ test('v2 private repo ' + idx + ' (' + entry.repo + ')', function (tt) {
             t.ok(ress);
             t.ok(Array.isArray(ress));
             t.equal(ress.length, 1);
-            var res = ress[0];
+            const res = ress[0];
             t.equal(res.statusCode, 404);
             t.equal(res.headers['docker-distribution-api-version'],
                 'registry/2.0');

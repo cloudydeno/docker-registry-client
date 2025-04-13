@@ -1,4 +1,16 @@
+# @cloudydeno/docker-rregistry-client Changelog
+
+## 0.6.0
+- Initial JSR release
+- Removed MD5 content validation
+- Replaced JS sha256 library with JSR WebAssembly module
+- Other minor (but breaking) adjustments to types
+
 # deno-docker_registry_client Changelog
+
+## 0.5.0
+- Deno 2
+- Allow providing a custom `Deno.HttpClient`
 
 ## 0.4.1
 

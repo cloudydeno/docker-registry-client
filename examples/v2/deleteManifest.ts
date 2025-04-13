@@ -18,17 +18,16 @@ import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
 const {opts, args} = mainline({
     cmd: 'deleteManifest',
 });
-var name = args[0];
+const name = args[0];
 if (!name || !(name.includes(':') || name.includes('@'))) {
     console.error('usage: node examples/v2/%s.js REPO:TAG|@DIGEST\n');
     Deno.exit(2);
 }
 
 // The interesting stuff starts here.
-var rar = parseRepoAndRef(name);
-var client = new RegistryClientV2({
+const rar = parseRepoAndRef(name);
+const client = new RegistryClientV2({
     repo: rar,
-    // log: log,
     insecure: opts.insecure,
     username: opts.username,
     password: opts.password,

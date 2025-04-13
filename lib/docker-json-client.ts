@@ -3,7 +3,6 @@
  * Copyright (c) 2015, Joyent, Inc.
  */
 
-import { Md5 } from "https://deno.land/std@0.130.0/hash/md5.ts";
 import { HttpError } from "./errors.ts";
 import { DockerResponse as DockerResponseInterface } from "./types.ts";
 
@@ -45,7 +44,7 @@ export class DockerJsonClient {
         this.client = options.client;
     }
 
-    async request(opts: HttpReqOpts) {
+    async request(opts: HttpReqOpts): Promise<DockerResponse> {
         const headers = new Headers(opts.headers);
         if (!headers.has('accept') && this.accept) {
             headers.set('accept', this.accept);
@@ -79,28 +78,14 @@ export class DockerResponse extends Response implements DockerResponseInterface 
     // Cache the body once we decode it once.
     decodedBody?: Uint8Array;
 
-    async dockerBody() {
-        if (this.decodedBody) return this.decodedBody;
-
-        const bytes = new Uint8Array(await this.arrayBuffer());
-        let body = bytes;
-
-        // Content-MD5 check.
-        const contentMd5 = this.headers.get('content-md5');
-        if (contentMd5 && this.status !== 206) {
-            const digest = new Md5().update(bytes).toString('base64');
-            if (contentMd5 !== digest) throw new Error(
-                `BadDigestError: Content-MD5 (${contentMd5} vs ${digest})`);
-        }
-
-        this.decodedBody = body;
-        return body;
+    async dockerBody(): Promise<Uint8Array> {
+        this.decodedBody ??= new Uint8Array(await this.arrayBuffer());
+        return this.decodedBody;
     }
 
-    async dockerJson() {
+    async dockerJson<Tjson=Record<string,unknown>>(): Promise<Tjson> {
         const body = this.decodedBody ?? await this.dockerBody();
         const text = new TextDecoder().decode(body);
-        if (text.trim().length == 0) return undefined;
 
         // Parse the body as JSON, if we can.
         try {
@@ -124,8 +109,12 @@ export class DockerResponse extends Response implements DockerResponseInterface 
         // Be nice and handle errors like
         // { error: { code: '', message: '' } }
         // in addition to { code: '', message: '' }.
-        let errObj = obj?.error ? [obj.error] : (obj?.errors as any[]) ?? (obj ? [obj] : []);
-        return errObj.filter(x => typeof x.message === 'string');
+        const errObj = (obj?.error ? [obj.error] : (obj?.errors as unknown[]) ?? (obj ? [obj] : [])) as Array<{
+            code?: string;
+            message: string;
+            detail?: string;
+        }>;
+        return errObj.flatMap(x => typeof x?.message === 'string' ? [x] : []);
     }
 
     async dockerThrowable(baseMsg: string): Promise<HttpError> {
@@ -152,27 +141,8 @@ export class DockerResponse extends Response implements DockerResponseInterface 
         }
     }
 
-    dockerStream() {
+    dockerStream(): ReadableStream<Uint8Array> {
         if (!this.body) throw new Error(`No body to stream`);
-        let stream = this.body;
-
-        // Content-MD5 check.
-        const contentMd5 = this.headers.get('content-md5');
-        if (contentMd5 && this.status !== 206) {
-            const hash = new Md5();
-            stream = stream.pipeThrough(new TransformStream({
-                transform(chunk, controller) {
-                    hash.update(chunk);
-                    controller.enqueue(chunk);
-                },
-                flush(controller) {
-                    const digest = hash.toString('base64');
-                    if (contentMd5 !== digest) controller.error(new Error(
-                        `BadDigestError: Content-MD5 (${contentMd5} vs ${digest})`));
-                },
-            }));
-        }
-
-        return stream;
+        return this.body;
     }
 }

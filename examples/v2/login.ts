@@ -21,8 +21,6 @@
  * Usage:
  *      node examples/login.js [-u username] [-p password] [INDEX-NAME]
  *
- * Run with -v for more more verbose logging.
- *
  * Example:
  *      $ node examples/login.js
  *      Username: bob
@@ -42,9 +40,9 @@ const {opts, args} = mainline({cmd: 'login'});
 
 // `docker login` with no args passes
 // `serveraddress=https://index.docker.io/v1/` (yes, "v1", even for v2 reg).
-var indexName = args[0] || 'https://index.docker.io/v1/';
-var username = opts.username || prompt('Username:')?.trim();
-var password = opts.password || prompt('Password:')?.trim();
+const indexName = args[0] || 'https://index.docker.io/v1/';
+const username = opts.username || prompt('Username:')?.trim();
+const password = opts.password || prompt('Password:')?.trim();
 
 const client = new RegistryClientV2({
     name: indexName,

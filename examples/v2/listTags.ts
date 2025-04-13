@@ -14,9 +14,9 @@ import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
  */
 
 // Shared mainline with examples/foo.js to get CLI opts.
-var cmd = 'listTags';
+const cmd = 'listTags';
 const {opts, args} = mainline({cmd: cmd});
-var name = args[0];
+const name = args[0];
 if (!name) {
     console.error('usage: node examples/v2/%s.js REPO');
     Deno.exit(2);
@@ -24,7 +24,7 @@ if (!name) {
 
 
 // The interesting stuff starts here.
-var client = new RegistryClientV2({
+const client = new RegistryClientV2({
     name: name,
     insecure: opts.insecure,
     username: opts.username,

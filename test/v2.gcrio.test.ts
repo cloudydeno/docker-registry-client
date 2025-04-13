@@ -141,7 +141,7 @@ Deno.test('v2 gcr.io / headBlob', async () => {
     const digest = _manifest.layers?.[0].digest;
     const ress = await client.headBlob({ digest });
     assert(Array.isArray(ress), 'responses is an array');
-    var first = ress[0];
+    const first = ress[0];
 
     // First request statusCode on a redirect:
     // - gcr.io gives 302 (Found)
@@ -159,7 +159,7 @@ Deno.test('v2 gcr.io / headBlob', async () => {
     assertEquals(first.headers.get('docker-distribution-api-version'),
         'registry/2.0');
 
-    var last = ress[ress.length - 1];
+    const last = ress[ress.length - 1];
     assert(last);
     assertEquals(last.status, 200,
         'last response status code should be 200');

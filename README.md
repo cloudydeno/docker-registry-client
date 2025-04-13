@@ -1,4 +1,4 @@
-![CI](https://github.com/cloudydeno/deno-docker_registry_client/actions/workflows/deno-ci.yaml/badge.svg?branch=main)
+![CI](https://github.com/cloudydeno/docker-registry-client/actions/workflows/deno-ci.yaml/badge.svg?branch=main)
 
 # `@cloudydeno/docker-registry-client`
 

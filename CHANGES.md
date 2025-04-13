@@ -6,7 +6,7 @@
 - Replaced JS sha256 library with JSR WebAssembly module
 - Other minor (but breaking) adjustments to types
 
-# deno-docker_registry_client Changelog
+# docker-registry-client Changelog
 
 ## 0.5.0
 - Deno 2

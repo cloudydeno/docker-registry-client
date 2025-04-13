@@ -1,7 +1,6 @@
-![Deno CI](https://github.com/cloudydeno/deno-docker_registry_client/workflows/CI/badge.svg?branch=main)
+![CI](https://github.com/cloudydeno/deno-docker_registry_client/actions/workflows/deno-ci.yaml/badge.svg?branch=main)
 
 # `@cloudydeno/docker-registry-client`
-
 
 A Deno-oriented port of a Docker Registry API V2 client.
 
@@ -37,9 +36,9 @@ specific *repository* and calling its methods.
 Simple usage will look like this:
 
 ```typescript
-import { RegistryClientV2 } from 'https://deno.land/x/docker_registry_client/registry-client-v2.ts';
-var REPO = 'alpine';
-var client = new RegistryClientV2({name: REPO});
+import { RegistryClientV2 } from 'jsr:@cloudydeno/docker-registry-client';
+const REPO = 'alpine';
+const client = new RegistryClientV2({name: REPO});
 
 const tags = await client.listTags();
 console.log(JSON.stringify(tags, null, 4));
@@ -48,9 +47,9 @@ console.log(JSON.stringify(tags, null, 4));
 If you need to authenticate, the `RegistryClientV2` call might look more like this:
 
 ```typescript
-import { RegistryClientV2 } from 'https://deno.land/x/docker_registry_client/registry-client-v2.ts';
+import { RegistryClientV2 } from 'jsr:@cloudydeno/docker-registry-client';
 
-var client = new RegistryClientV2({
+const client = new RegistryClientV2({
     name: 'alpine',
     // Optional basic auth to the registry
     username: <username>,

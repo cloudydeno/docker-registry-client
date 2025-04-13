@@ -67,7 +67,7 @@ var options: CliOption[] = [
 export function fail(cmd: string, err: Error, opts: {
     verbose?: boolean;
 } = {}) {
-    var errToShow = opts.verbose ? err.stack || err : err.message || err;
+    const errToShow = opts.verbose ? err.stack || err : err.message || err;
     console.error('%s: error: %s', cmd, errToShow);
     Deno.exit(2);
 }
@@ -78,7 +78,7 @@ export function mainline(config: {
     excludeAuth?: boolean;
     options?: CliOption[];
 }) {
-    var dashOpts = (config.excludeAuth ? optionsNoAuth : options);
+    const dashOpts = (config.excludeAuth ? optionsNoAuth : options);
     if (config.options) {
         // Add to existing options.
         dashOpts = dashOpts.concat(config.options);

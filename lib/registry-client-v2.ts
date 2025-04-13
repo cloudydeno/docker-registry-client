@@ -136,20 +136,20 @@ function _makeAuthScope(resource: string, name: string, actions: string[]) {
  * Usage:
  *      var regErr = _getRegistryErrMessage(body));
  */
-function _getRegistryErrMessage(body: any) {
+function _getRegistryErrMessage(body: string | Record<string,unknown> | null | undefined) {
     if (!body) {
         return null;
     }
-    var obj = body;
-    if (typeof (obj) === 'string' && obj.length <= MAX_REGISTRY_ERROR_LENGTH) {
+    const obj = body;
+    if (typeof obj === 'string' && obj.length <= MAX_REGISTRY_ERROR_LENGTH) {
         try {
-            obj = JSON.parse(obj);
-        } catch (ex) {
+            return JSON.parse(obj);
+        } catch {
             // Just return the error as a string.
-            return obj;
+            return obj as string;
         }
     }
-    if (typeof (obj) !== 'object' || !obj.hasOwnProperty('errors')) {
+    if (typeof (obj) !== 'object' || !Object.hasOwnProperty.call(obj, 'errors')) {
         return null;
     }
     if (!Array.isArray(obj.errors)) {
@@ -180,7 +180,7 @@ function _getRegistryErrMessage(body: any) {
 // detailed error msg.
 async function registryError(err: any, res: DockerResponse) {
     // Parse errors in the response body.
-    var message = _getRegistryErrMessage(await res.dockerJson());
+    const message = _getRegistryErrMessage(await res.dockerJson());
     if (message) {
         err.message = message;
     }
@@ -208,7 +208,7 @@ async function registryError(err: any, res: DockerResponse) {
  * example of that.
  */
 function _parseWWWAuthenticate(header: string) {
-    var parsed = new Parse_WWW_Authenticate(header);
+    const parsed = new Parse_WWW_Authenticate(header);
     if (parsed.err) {
         throw new Error('could not parse WWW-Authenticate header "' + header
             + '": ' + parsed.err);
@@ -264,7 +264,7 @@ function _parseDockerContentDigest(dcd: string) {
  * @throws {InvalidContentError} if there is a problem parsing the manifest.
  */
 export async function digestFromManifestStr(manifestStr: string): Promise<string> {
-    var manifest;
+    let manifest: Manifest | {schemaVersion: 1};
     try {
         manifest = JSON.parse(manifestStr);
     } catch (thrown) {
@@ -453,8 +453,8 @@ export class RegistryClientV2 {
         scopes?: string[];
     }): Promise<string> {
         // - add https:// prefix (or http) if none on 'realm'
-        var tokenUrl = opts.realm;
-        var match = /^(\w+):\/\//.exec(tokenUrl);
+        let tokenUrl = opts.realm;
+        const match = /^(\w+):\/\//.exec(tokenUrl);
         if (!match) {
             tokenUrl = (this.insecure ? 'http' : 'https') + '://' + tokenUrl;
         } else if (['http', 'https'].indexOf(match[1]) === -1) {
@@ -467,8 +467,8 @@ export class RegistryClientV2 {
         //      (&scope=$scope)*
         //      (&account=$username)
         //   Authorization: Basic ...
-        var headers = new Headers;
-        var query = new URLSearchParams;
+        const headers = new Headers;
+        const query = new URLSearchParams;
         if (opts.service) {
             query.set('service', opts.service);
         }
@@ -499,7 +499,7 @@ export class RegistryClientV2 {
         if (resp.status === 401) {
             // Convert *all* 401 errors to use a generic error constructor
             // with a simple error message.
-            var errMsg = _getRegistryErrorMessage(await resp.dockerJson());
+            const errMsg = _getRegistryErrorMessage(await resp.dockerJson());
             throw await resp.dockerThrowable('Registry auth failed: '+errMsg);
         }
         const body = await resp.dockerJson();
@@ -531,7 +531,7 @@ export class RegistryClientV2 {
         pingRes?: DockerResponse;
         scope?: string;
     } = {}): Promise<void> {
-        var scope = opts.scope || _makeAuthScope('repository', this.repo.remoteName, this.scopes);
+        const scope = opts.scope || _makeAuthScope('repository', this.repo.remoteName, this.scopes);
 
         if (this._loggedIn && this._loggedInScope === scope) {
             return;
@@ -553,7 +553,7 @@ export class RegistryClientV2 {
      * https://docs.docker.com/registry/spec/api/#api-version-check
      */
     async supportsV2(): Promise<boolean> {
-        let res;
+        let res: DockerResponse;
         try {
             res = await this.ping();
         } catch (thrown) {
@@ -562,9 +562,9 @@ export class RegistryClientV2 {
             throw err;
         }
 
-        var header = res.headers.get('docker-distribution-api-version');
+        const header = res.headers.get('docker-distribution-api-version');
         if (header) {
-            var versions = header.split(/[\s,]+/g);
+            const versions = header.split(/[\s,]+/g);
             if (versions.includes('registry/2.0')) {
                 return true;
             }
@@ -600,13 +600,13 @@ export class RegistryClientV2 {
         resp: DockerResponse;
         manifest: Manifest;
     }> {
-        var acceptOCIManifests = opts.acceptOCIManifests
+        const acceptOCIManifests = opts.acceptOCIManifests
             ?? this.acceptOCIManifests;
-        var acceptManifestLists = opts.acceptManifestLists
+        const acceptManifestLists = opts.acceptManifestLists
             ?? this.acceptManifestLists;
 
         await this.login();
-        var headers = new Headers(this._headers);
+        const headers = new Headers(this._headers);
         headers.append('accept', MEDIATYPE_MANIFEST_V2);
         if (acceptManifestLists) {
             headers.append('accept', MEDIATYPE_MANIFEST_LIST_V2);
@@ -626,7 +626,7 @@ export class RegistryClientV2 {
             expectStatus: [200, 401],
         });
         if (resp.status === 401) {
-            var errMsg = _getRegistryErrorMessage(await resp.dockerJson());
+            const errMsg = _getRegistryErrorMessage(await resp.dockerJson());
             throw await resp.dockerThrowable(`Manifest ${JSON.stringify(opts.ref)} Not Found: ${errMsg}`);
         }
 
@@ -669,7 +669,7 @@ export class RegistryClientV2 {
         const followRedirects = opts.followRedirects ?? true;
         const maxRedirects = opts.maxRedirects ?? 3;
         let numRedirs = 0;
-        let req = {
+        const req = {
             path: opts.path,
             headers: opts.headers,
         };
@@ -697,10 +697,8 @@ export class RegistryClientV2 {
 
             const loc = new URL(location, new URL(req.path, this._url));
             // this.log.trace({numRedirs: numRedirs, loc: loc}, 'got redir response');
-            req = {
-                path: loc.toString(),
-                headers: new Headers,
-            };
+            req.path = loc.toString();
+            req.headers = new Headers;
 
             await resp.body?.cancel();
         }
@@ -771,7 +769,6 @@ export class RegistryClientV2 {
                     `Docker-Content-Digest header, ${dcdInfo.raw}, does not match ` +
                     `given digest, ${opts.digest}`);
             }
-
 
             stream = dcdInfo.validateStream(stream);
         }

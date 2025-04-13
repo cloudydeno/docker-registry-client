@@ -169,19 +169,19 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex): R
     // Strip off optional leading `INDEX/`, parse it to `info.index` and
     // leave the rest in `remoteName`.
     let remoteNameRaw: string;
-    var protoSepIdx = arg.indexOf('://');
+    const protoSepIdx = arg.indexOf('://');
     if (protoSepIdx !== -1) {
         // (A) repo with a protocol, e.g. 'https://host/repo'.
-        var slashIdx = arg.indexOf('/', protoSepIdx + 3);
+        const slashIdx = arg.indexOf('/', protoSepIdx + 3);
         if (slashIdx === -1) {
             throw new Error('invalid repository name, no "/REPO" after ' +
                 'hostame: ' + arg);
         }
-        var indexName = arg.slice(0, slashIdx);
+        const indexName = arg.slice(0, slashIdx);
         remoteNameRaw = arg.slice(slashIdx + 1);
         index = parseIndex(indexName);
     } else {
-        var parts = splitIntoTwo(arg, '/');
+        const parts = splitIntoTwo(arg, '/');
         if (parts.length === 1 || (
             /* or if parts[0] doesn't look like a hostname or IP */
             parts[0].indexOf('.') === -1 &&
@@ -205,7 +205,7 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex): R
     }
 
     // Validate remoteName (docker `validateRemoteName`).
-    var nameParts = splitIntoTwo(remoteNameRaw, '/');
+    const nameParts = splitIntoTwo(remoteNameRaw, '/');
     let ns = '', name: string;
     if (nameParts.length === 2) {
         name = nameParts[1];
@@ -241,22 +241,18 @@ export function parseRepo(arg: string, defaultIndex?: string | RegistryIndex): R
             '[a-z0-9_/.-] characters: ' + name);
     }
 
-    let official = index.official && ns === 'library';
+    const isLibrary = index.official && ns === 'library';
     const remoteName = ns ? `${ns}/${name}` : name;
-    let localName: string;
-    let canonicalName: string;
-
-    if (index.official) {
-        localName = official ? name : remoteName;
-        canonicalName = DEFAULT_INDEX_NAME + '/' + localName;
-    } else {
-        localName = index.name + '/' + remoteName;
-        canonicalName = localName;
-    }
+    const localName = index.official
+        ? (isLibrary ? name : remoteName)
+        : `${index.name}/${remoteName}`;
+    const canonicalName = index.official
+        ? `${DEFAULT_INDEX_NAME}/${localName}`
+        : localName;
 
     return {
         index,
-        official,
+        official: isLibrary,
         remoteName,
         localName,
         canonicalName,
@@ -340,7 +336,7 @@ export function urlFromIndex(index: RegistryIndex, scheme?: 'http' | 'https'): s
 
 
 export function isLocalhost(host: string): boolean {
-    var lead = host.split(':')[0];
+    const lead = host.split(':')[0];
     if (lead === 'localhost' || lead === '127.0.0.1' || host.includes('::1')) {
         return true;
     } else {

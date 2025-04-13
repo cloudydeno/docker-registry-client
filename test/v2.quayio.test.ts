@@ -139,11 +139,11 @@ Deno.test('v2 quay.io / getManifest (bad username/password)', async () => {
 Deno.test('v2 quay.io / headBlob', async () => {
     if (!_manifest) throw new Error('cannot test');
     const client = new RegistryClientV2({ repo });
-    var digest = getFirstLayerDigestFromManifest(_manifest);
+    const digest = getFirstLayerDigestFromManifest(_manifest);
     const ress = await client.headBlob({ digest });
     assert(ress);
     assert(Array.isArray(ress));
-    var first = ress[0];
+    const first = ress[0];
     assert(first.status === 200 || first.status === 307);
     assertEquals(first.headers.get('docker-content-digest'), digest);
 
@@ -152,7 +152,7 @@ Deno.test('v2 quay.io / headBlob', async () => {
     // assertEquals(first.headers.get('docker-distribution-api-version'),
     //    'registry/2.0');
 
-    var last = ress[ress.length - 1];
+    const last = ress[ress.length - 1];
     assert(last);
     assertEquals(last.status, 200);
 

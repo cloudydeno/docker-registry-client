@@ -11,12 +11,12 @@ class Parser {
 
   parse_params (header: string) {
     // This parser will definitely fail if there is more than one challenge
-    let tok, last_tok, _i, _len, key, value;
+    let key: string | null = null;
+    let value: string | null = null;
     let state= 0;   //0: token,
     const m= header.split(Separators)
-    for (_i = 0, _len = m.length; _i < _len; _i++) {
-      last_tok= tok;
-      tok = m[_i];
+    for (let _i = 0, _len = m.length; _i < _len; _i++) {
+      const tok = m[_i];
       if (!tok.length) continue;
       switch (state) {
         case 0: // token
@@ -60,10 +60,7 @@ class Parser {
             state= 0;
             continue;
           }
-          else {
-            return 'Unexpected token ('+tok+') after '+value+'"';
-          }
-          continue;
+          return 'Unexpected token ('+tok+') after '+value+'"';
         case 9: // expect commma
           if (',' != tok) return 'Comma expected after '+value;
           state= 0;

@@ -67,7 +67,7 @@ let _manifest: ManifestV2 | null;
 let _manifestDigest: string | null;
 Deno.test('v2 mcr.microsoft.com / getManifest (v2.2 list)', async () => {
     const client = new RegistryClientV2({ repo });
-    var getOpts = {
+    const getOpts = {
         acceptManifestLists: true,
         ref: TAG
     };
@@ -155,11 +155,11 @@ Deno.test('v2 mcr.microsoft.com / getManifest (unknown repo)', async () => {
 Deno.test('v2 mcr.microsoft.com / headBlob', async () => {
     if (!_manifestDigest || !_manifest) throw new Error('cannot test');
     const client = new RegistryClientV2({ repo });
-    var digest = getFirstLayerDigestFromManifest(_manifest);
+    const digest = getFirstLayerDigestFromManifest(_manifest);
     const ress = await client.headBlob({digest: digest});
     assert(ress, 'got a "ress"');
     assert(Array.isArray(ress), '"ress" is an array');
-    var first = ress[0];
+    const first = ress[0];
     assert(first.status === 200 || first.status === 307,
         'first response statusCode is 200 or 307');
     if (first.headers.get('docker-content-digest')) {
@@ -170,9 +170,9 @@ Deno.test('v2 mcr.microsoft.com / headBlob', async () => {
     assertEquals(first.headers.get('docker-distribution-api-version'),
         'registry/2.0',
         '"docker-distribution-api-version" header is "registry/2.0"');
-    var last = ress[ress.length - 1];
+    const last = ress[ress.length - 1];
     assertEquals(last.status, 200, 'last response statusCode is 200');
-    var contentType = last.headers.get('content-type');
+    const contentType = last.headers.get('content-type');
     assert(['application/octet-stream', 'application/x-gzip']
         .indexOf(contentType ?? '') !== -1,
         'content-type is as expected, got ' + contentType);

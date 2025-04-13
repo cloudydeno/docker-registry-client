@@ -19,11 +19,11 @@ var drc = require('../../');
 var mainline = require('../mainline');
 
 function getFileSha256(filepath, callback) {
-    var sha256 = crypto.createHash('sha256');
-    var stream = fs.createReadStream(filepath);
+    const sha256 = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filepath);
 
     sha256.on('readable', function () {
-        var digest = sha256.read();
+        const digest = sha256.read();
         if (digest) {
             callback(null, digest.toString('hex'));
         }
@@ -48,16 +48,16 @@ mainline({cmd: cmd}, function (log, parser, opts, args) {
     }
 
     // The interesting stuff starts here.
-    var rar = drc.parseRepoAndRef(args[0]);
+    const rar = drc.parseRepoAndRef(args[0]);
     assert.ok(rar.canonicalName, 'must specify a repo');
     console.log('Repo:', rar.canonicalName);
 
-    var filepath = args[1];
+    const filepath = args[1];
     assert.string(filepath, 'must specify a blob filepath');
-    var fileSize = fs.statSync(filepath).size;
+    const fileSize = fs.statSync(filepath).size;
 
     getFileSha256(filepath, function (err, sha256) {
-        var client = drc.RegistryClientV2({
+        const client = drc.RegistryClientV2({
             insecure: opts.insecure,
             log: log,
             repo: rar,
@@ -65,9 +65,9 @@ mainline({cmd: cmd}, function (log, parser, opts, args) {
             password: opts.password
         });
 
-        var digest = 'sha256:' + sha256;
-        var stream = fs.createReadStream(filepath);
-        var blobOpts = {
+        const digest = 'sha256:' + sha256;
+        const stream = fs.createReadStream(filepath);
+        const blobOpts = {
             contentLength: fileSize,
             digest: digest,
             stream: stream

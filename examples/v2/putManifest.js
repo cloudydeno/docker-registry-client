@@ -19,8 +19,8 @@ var drc = require('../../');
 var mainline = require('../mainline');
 
 function getFileSha256(filepath, callback) {
-    var sha256 = crypto.createHash('sha256');
-    var stream = fs.createReadStream(filepath);
+    const sha256 = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filepath);
 
     sha256.on('readable', function () {
         callback(null, sha256.read().toString('hex'));
@@ -45,18 +45,18 @@ mainline({cmd: cmd}, function (log, parser, opts, args) {
     }
 
     // The interesting stuff starts here.
-    var rar = drc.parseRepoAndRef(args[0]);
+    const rar = drc.parseRepoAndRef(args[0]);
     assert.ok(rar.canonicalName, 'must specify a repo');
-    var ref = rar.tag || rar.digest;
+    const ref = rar.tag || rar.digest;
     assert.ok(ref, 'must specify a tag or digest');
 
     console.log('Repo:', rar.canonicalName + ':' + ref);
 
-    var filepath = args[1];
+    const filepath = args[1];
     assert.string(filepath, 'must specify a blob filepath');
-    var contents = fs.readFileSync(filepath).toString();
+    const contents = fs.readFileSync(filepath).toString();
 
-    var client = drc.RegistryClientV2({
+    const client = drc.RegistryClientV2({
         repo: rar,
         log: log,
         insecure: opts.insecure,
@@ -65,7 +65,7 @@ mainline({cmd: cmd}, function (log, parser, opts, args) {
     });
 
     console.log('Uploading manifest: %s', filepath);
-    var manifestOpts = {
+    const manifestOpts = {
         manifest: contents,
         ref: ref
     };

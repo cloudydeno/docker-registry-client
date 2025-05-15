@@ -14,7 +14,7 @@ import {
     MEDIATYPE_OCI_MANIFEST_V1,
     MEDIATYPE_OCI_MANIFEST_INDEX_V1,
 } from "./common.ts";
-import {
+import type {
     Manifest,
     RegistryRepo,
     RegistryClientOpts,
@@ -648,7 +648,7 @@ export class RegistryClientV2 {
             headers: this._headers,
             expectStatus: [200, 202],
         });
-        await resp.dockerJson(); // GCR gives { errors: [] }
+        await resp.dockerBody(); // some registries give JSON, others give 202 with empty body
     };
 
     /**

@@ -1,6 +1,6 @@
 {
   "name": "@cloudydeno/docker-registry-client",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "license": "MPL",
   "exports": {
     "./common": "./lib/common.ts",

@@ -4,7 +4,7 @@
  */
 
 import { HttpError } from "./errors.ts";
-import { DockerResponse as DockerResponseInterface } from "./types.ts";
+import type { DockerResponse as DockerResponseInterface } from "./types.ts";
 
 // --- API
 

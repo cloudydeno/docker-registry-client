@@ -1,5 +1,10 @@
 # @cloudydeno/docker-rregistry-client Changelog
 
+## 0.6.1
+- Fix incompatibility with Google Artifact Registry
+  - deleteManifest() now tolerates HTTP 202 responses
+- Annotate all imports of types.ts with the `type` keyword
+
 ## 0.6.0
 - Initial JSR release
 - Removed MD5 content validation

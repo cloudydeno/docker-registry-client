@@ -8,7 +8,7 @@
  * Copyright 2016 Joyent, Inc.
  */
 
-export * from './types.ts';
+export type * from './types.ts';
 
 export {
     RegistryClientV2,

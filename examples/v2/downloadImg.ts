@@ -18,7 +18,7 @@
 import { MultiProgressBar } from "jsr:@deno-library/progress@1.5.1";
 
 import { mainline } from "../mainline.ts";
-import { parseRepoAndRef } from "../../lib/common.ts";
+import { MEDIATYPE_MANIFEST_LIST_V2, parseRepoAndRef } from "../../lib/common.ts";
 import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
 import { Manifest } from "../../lib/types.ts";
 
@@ -123,7 +123,7 @@ function getLayersFromManifest(manifest: Manifest): Array<{
     size?: number;
 }> {
     if (manifest.schemaVersion !== 2) return [];
-    if (manifest.mediaType === 'application/vnd.docker.distribution.manifest.list.v2+json') throw new Error(`Got a manifest list for some reason`);
+    if (manifest.mediaType === MEDIATYPE_MANIFEST_LIST_V2) throw new Error(`Got a manifest list for some reason`);
     return manifest.layers.map(layer => ({
         digest: layer.digest,
         size: layer.size,

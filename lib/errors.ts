@@ -8,7 +8,7 @@
  * Copyright (c) 2015, Joyent, Inc.
  */
 
-import { DockerResponse, RegistryError } from "./types.ts";
+import type { DockerResponse, RegistryError } from "./types.ts";
 
 /*
  * Error classes that docker-registry-client may produce.

@@ -11,16 +11,15 @@
  */
 
 import { mainline } from "../mainline.ts";
-import { parseRepoAndRef } from "../../lib/common.ts";
-import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
+import { parseRepoAndRef } from "@cloudydeno/docker-registry-client/common";
+import { RegistryClientV2 } from "@cloudydeno/docker-registry-client/registry-client-v2";
 
 // Shared mainline with examples/foo.js to get CLI opts.
-const {opts, args} = mainline({
-    cmd: 'deleteManifest',
-});
+const cmd = 'deleteManifest';
+const {opts, args} = mainline({ cmd });
 const name = args[0];
 if (!name || !(name.includes(':') || name.includes('@'))) {
-    console.error('usage: node examples/v2/%s.js REPO:TAG|@DIGEST\n');
+    console.error('usage: examples/v2/%s.ts REPO:TAG|@DIGEST', cmd);
     Deno.exit(2);
 }
 

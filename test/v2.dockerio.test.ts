@@ -14,9 +14,9 @@ import {
     hashAndCount,
 } from "./util.ts";
 
-import { digestFromManifestStr, RegistryClientV2 } from "../lib/registry-client-v2.ts";
-import { parseRepo, MEDIATYPE_OCI_MANIFEST_INDEX_V1 } from "../lib/common.ts";
-import { ManifestOCIIndex } from "../lib/types.ts";
+import { digestFromManifestStr, RegistryClientV2 } from "@cloudydeno/docker-registry-client/registry-client-v2";
+import { parseRepo, MEDIATYPE_OCI_MANIFEST_INDEX_V1 } from "@cloudydeno/docker-registry-client/common";
+import { ManifestOCIIndex } from "@cloudydeno/docker-registry-client/types";
 
 // --- globals
 

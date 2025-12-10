@@ -11,12 +11,13 @@
  */
 
 import { mainline } from "../mainline.ts";
-import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
+import { RegistryClientV2 } from "@cloudydeno/docker-registry-client/registry-client-v2";
 
 // Shared mainline with examples/foo.js to get CLI opts.
-const {opts, args} = mainline({cmd: 'ping'});
+const cmd = 'ping';
+const {opts, args} = mainline({ cmd });
 if (opts.help) {
-    console.error('usage: node examples/v2/%s.js [INDEX]');
+    console.error('usage: examples/v2/%s.ts [INDEX]', cmd);
     Deno.exit(0);
 }
 

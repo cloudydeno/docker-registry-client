@@ -14,7 +14,7 @@
  * An example showing how an index (a.k.a. repository host) string is parsed.
  */
 
-import { parseIndex } from "../lib/common.ts";
+import { parseIndex } from "@cloudydeno/docker-registry-client/common";
 
 if (Deno.args.length != 1) {
     console.error(

@@ -7,7 +7,7 @@
  */
 
 import { mainline } from "../mainline.ts";
-import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
+import { RegistryClientV2 } from "@cloudydeno/docker-registry-client/registry-client-v2";
 
 /*
  * Copyright (c) 2015, Joyent, Inc.
@@ -15,10 +15,10 @@ import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
 
 // Shared mainline with examples/foo.js to get CLI opts.
 const cmd = 'listTags';
-const {opts, args} = mainline({cmd: cmd});
+const {opts, args} = mainline({ cmd });
 const name = args[0];
 if (!name) {
-    console.error('usage: node examples/v2/%s.js REPO');
+    console.error('usage: examples/v2/%s.ts REPO', cmd);
     Deno.exit(2);
 }
 

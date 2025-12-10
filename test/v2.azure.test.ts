@@ -14,9 +14,9 @@ import {
     hashAndCount,
 } from "./util.ts";
 
-import { RegistryClientV2, digestFromManifestStr } from "../lib/registry-client-v2.ts";
-import { parseRepo, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
-import { ManifestV2 } from "../lib/types.ts";
+import { RegistryClientV2, digestFromManifestStr } from "@cloudydeno/docker-registry-client/registry-client-v2";
+import { parseRepo, MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2 } from "@cloudydeno/docker-registry-client/common";
+import { ManifestV2 } from "@cloudydeno/docker-registry-client/types";
 
 // --- globals
 

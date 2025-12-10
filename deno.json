@@ -1,22 +1,7 @@
 {
-  "name": "@cloudydeno/docker-registry-client",
-  "version": "0.6.1",
-  "license": "MPL",
-  "imports": {
-    "@std/crypto": "jsr:@std/crypto@^1.0.5"
-  },
-  "exports": {
-    "./common": "./lib/common.ts",
-    "./docker-json-client": "./lib/docker-json-client.ts",
-    "./registry-client-v2": "./lib/registry-client-v2.ts",
-    "./types": "./lib/types.ts",
-    ".": "./lib/index.ts"
-  },
-  "publish": {
-    "exclude": [
-      "examples",
-      ".github",
-      ".gitignore"
-    ]
-  }
+  "workspace": [
+    "examples",
+    "lib",
+    "test"
+  ]
 }

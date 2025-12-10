@@ -18,7 +18,7 @@
 // var format = require('util').format;
 // var read = require('read');
 
-import { parse } from "https://deno.land/std@0.130.0/flags/mod.ts";
+import { parseArgs } from "@std/cli/parse-args";
 
 export interface CliOption {
     names: string[];
@@ -84,24 +84,34 @@ export function mainline(config: {
         dashOpts = dashOpts.concat(config.options);
     }
 
-    const parseArgs = {
+    const argOpts = {
         string: new Array<string>(),
         boolean: new Array<string>(),
         alias: Object.create(null) as Record<string, string[]>,
     };
     for (const opt of dashOpts) {
         if (opt.names.length > 1) {
-            parseArgs.alias[opt.names[0]] = opt.names.slice(1);
+            argOpts.alias[opt.names[0]] = opt.names.slice(1);
         }
         if (opt.type === 'string') {
-            parseArgs.string.push(opt.names[0]);
+            argOpts.string.push(opt.names[0]);
         }
         if (opt.type === 'bool') {
-            parseArgs.boolean.push(opt.names[0]);
+            argOpts.boolean.push(opt.names[0]);
         }
     }
 
-    const opts = parse(Deno.args, parseArgs);
+    const opts = parseArgs(Deno.args, argOpts) as {
+        _: Array<string>;
+        username?: string;
+        password?: string;
+        insecure?: boolean;
+        help?: boolean;
+        verbose?: boolean;
+
+        'accept-list'?: boolean;
+        'accept-oci'?: boolean;
+    };
 
     // var logLevel = 'warn';
     // if (opts.verbose) {

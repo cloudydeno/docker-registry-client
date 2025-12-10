@@ -31,12 +31,13 @@
 /* END JSSTYLED */
 
 import { mainline } from "../mainline.ts";
-import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
+import { RegistryClientV2 } from "@cloudydeno/docker-registry-client/registry-client-v2";
 
 
 // --- globals
 
-const {opts, args} = mainline({cmd: 'login'});
+const cmd = 'login';
+const {opts, args} = mainline({ cmd });
 
 // `docker login` with no args passes
 // `serveraddress=https://index.docker.io/v1/` (yes, "v1", even for v2 reg).
@@ -47,8 +48,8 @@ const password = opts.password || prompt('Password:')?.trim();
 const client = new RegistryClientV2({
     name: indexName,
     // auth info:
-    username: username,
-    password: password,
+    username,
+    password,
 });
 const result = await client.login();
 console.log('Result:', JSON.stringify(result, null, 4));

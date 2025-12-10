@@ -14,7 +14,7 @@
  * An example showing how a repo string is parsed.
  */
 
-import { parseRepo } from "../lib/common.ts";
+import { parseRepo } from "@cloudydeno/docker-registry-client/common";
 
 if (Deno.args.length !== 1) {
     console.error(

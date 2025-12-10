@@ -1,4 +1,9 @@
-# @cloudydeno/docker-rregistry-client Changelog
+# @cloudydeno/docker-registry-client Changelog
+
+## Unreleased
+- Update test expectations for registry updates
+- Use Deno workspaces so examples and tests include the real imports
+- Replace remaining https:// deps for tests and examples with JSR deps
 
 ## 0.6.1
 - Fix incompatibility with Google Artifact Registry

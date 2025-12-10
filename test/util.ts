@@ -1,13 +1,21 @@
-export { assertEquals, assert } from "https://deno.land/std@0.130.0/testing/asserts.ts";
-export { dirname } from "https://deno.land/std@0.130.0/path/posix.ts";
+import { assert } from "@std/assert/assert";
+import { assertEquals } from "@std/assert/equals";
+import { assertObjectMatch } from "@std/assert/object-match";
+import { assertRejects } from "@std/assert/rejects";
+import { assertThrows } from "@std/assert/throws";
+export {
+  assert,
+  assertEquals,
+  assertObjectMatch,
+  assertRejects,
+  assertThrows,
+};
 
+export { dirname } from "@std/path/dirname";
 
-import { Sha256 } from "https://deno.land/std@0.130.0/hash/sha256.ts";
-import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.130.0/testing/asserts.ts";
-
-import { HttpError } from "../lib/errors.ts";
-import { MEDIATYPE_MANIFEST_V2, MEDIATYPE_OCI_MANIFEST_V1 } from "../lib/common.ts";
-import { Manifest } from "../lib/types.ts";
+import { HttpError } from "@cloudydeno/docker-registry-client/errors";
+import { MEDIATYPE_MANIFEST_V2, MEDIATYPE_OCI_MANIFEST_V1 } from "@cloudydeno/docker-registry-client/common";
+import { Manifest } from "@cloudydeno/docker-registry-client/types";
 
 export async function assertThrowsHttp<T = void>(
   fn: () => Promise<T>,

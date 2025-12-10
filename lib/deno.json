@@ -1,0 +1,16 @@
+{
+  "name": "@cloudydeno/docker-registry-client",
+  "version": "0.6.1",
+  "license": "MPL",
+  "imports": {
+    "@std/crypto": "jsr:@std/crypto@^1.0.5"
+  },
+  "exports": {
+    "./common": "./common.ts",
+    "./errors": "./errors.ts",
+    "./docker-json-client": "./docker-json-client.ts",
+    "./registry-client-v2": "./registry-client-v2.ts",
+    "./types": "./types.ts",
+    ".": "./index.ts"
+  }
+}

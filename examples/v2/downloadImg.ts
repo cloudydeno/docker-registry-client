@@ -15,19 +15,20 @@
  * the manifest and all layers to files in the current directory.
  */
 
-import { MultiProgressBar } from "jsr:@deno-library/progress@1.5.1";
+import { MultiProgressBar } from "@deno-library/progress";
 
 import { mainline } from "../mainline.ts";
-import { MEDIATYPE_MANIFEST_LIST_V2, parseRepoAndRef } from "../../lib/common.ts";
-import { RegistryClientV2 } from "../../lib/registry-client-v2.ts";
-import { Manifest } from "../../lib/types.ts";
+import { MEDIATYPE_MANIFEST_LIST_V2, MEDIATYPE_MANIFEST_V2, MEDIATYPE_OCI_MANIFEST_INDEX_V1, MEDIATYPE_OCI_MANIFEST_V1, parseRepoAndRef } from "@cloudydeno/docker-registry-client/common";
+import { RegistryClientV2 } from "@cloudydeno/docker-registry-client/registry-client-v2";
+import { Manifest } from "@cloudydeno/docker-registry-client/types";
 
 // Shared mainline with examples/foo.js to get CLI opts.
-const {opts, args} = mainline({cmd: 'downloadImg'})
+const cmd = 'downloadImg';
+const {opts, args} = mainline({ cmd })
 if (!args[0] || (args[0].indexOf(':') === -1 && !args[1])) {
     console.error('usage:\n' +
-        '    ./examples/v2/%s.ts REPO@DIGEST\n' +
-        '    ./examples/v2/%s.ts REPO:TAG\n');
+        '    examples/v2/%s.ts REPO@DIGEST\n' +
+        '    examples/v2/%s.ts REPO:TAG\n', cmd, cmd);
     Deno.exit(2);
 }
 
@@ -123,9 +124,12 @@ function getLayersFromManifest(manifest: Manifest): Array<{
     size?: number;
 }> {
     if (manifest.schemaVersion !== 2) return [];
-    if (manifest.mediaType === MEDIATYPE_MANIFEST_LIST_V2) throw new Error(`Got a manifest list for some reason`);
-    return manifest.layers.map(layer => ({
-        digest: layer.digest,
-        size: layer.size,
-    }));
+    if (manifest.mediaType === MEDIATYPE_MANIFEST_V2 ||
+        manifest.mediaType === MEDIATYPE_OCI_MANIFEST_V1) {
+        return manifest.layers.map(layer => ({
+            digest: layer.digest,
+            size: layer.size,
+        }));
+    }
+    throw new Error(`Got a strange manifest: ${manifest.mediaType}`);
 }

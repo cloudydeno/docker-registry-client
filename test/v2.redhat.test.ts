@@ -17,8 +17,8 @@ import {
     assert, assertEquals, assertThrowsHttp,
 } from "./util.ts";
 
-import { RegistryClientV2 } from "../lib/registry-client-v2.ts";
-import { parseRepo, MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
+import { RegistryClientV2 } from "@cloudydeno/docker-registry-client/registry-client-v2";
+import { parseRepo, MEDIATYPE_MANIFEST_V2 } from "@cloudydeno/docker-registry-client/common";
 
 // --- globals
 

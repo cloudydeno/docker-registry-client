@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "@deno-library/progress": "jsr:@deno-library/progress@^1.5.1",
+    "@std/cli": "jsr:@std/cli@^1.0.24"
+  }
+}

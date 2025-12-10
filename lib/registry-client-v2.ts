@@ -240,7 +240,7 @@ function _parseDockerContentDigest(dcd: string) {
         algorithm: parts[0],
         expectedDigest: parts[1],
         async runHash(inStream: ReadableStream<Uint8Array>) { switch (this.algorithm) {
-            case 'sha256': return await crypto.subtle.digest("SHA-256", inStream);
+            case 'sha256': return await crypto.subtle.digest("SHA-256", inStream as ReadableStream<Uint8Array<ArrayBuffer>>);
             default: throw new e.BadDigestError(`Unsupported hash algorithm ${this.algorithm}`);
         } },
         validateStream(inStream: ReadableStream<Uint8Array>) {
@@ -802,7 +802,7 @@ export class RegistryClientV2 {
             headers: _setAuthHeaderFromAuthInfo(new Headers({
                 'content-type': mediaType,
             }), this._authInfo ?? null),
-            body: opts.manifestData,
+            body: opts.manifestData as BufferSource,
             expectStatus: [201],
         }).catch(cause => Promise.reject(new e.UploadError("Manifest upload failed.", {cause})));
 
@@ -845,7 +845,7 @@ export class RegistryClientV2 {
                 'content-length': `${opts.contentLength}`,
                 'content-type': (opts.contentType || 'application/octet-stream'),
             }), this._authInfo ?? null),
-            body: opts.stream,
+            body: opts.stream as BufferSource,
             expectStatus: [201],
         }).catch(cause => Promise.reject(new e.UploadError("Blob upload failed.", {cause})));
     }

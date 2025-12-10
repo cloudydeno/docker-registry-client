@@ -16,16 +16,16 @@ import {
 } from "./util.ts";
 
 import { RegistryClientV2 } from "../lib/registry-client-v2.ts";
-import { parseRepo, MEDIATYPE_MANIFEST_V2 } from "../lib/common.ts";
-import { ManifestV2 } from "../lib/types.ts";
+import { parseRepo, MEDIATYPE_OCI_MANIFEST_V1 } from "../lib/common.ts";
+import { ManifestOCI } from "../lib/types.ts";
 
 // --- globals
 
-const REPO = 'quay.io/coreos/kube-state-metrics';
+const REPO = 'quay.io/coreos/etcd';
 const repo = parseRepo(REPO);
 // Note: Not using TAG='latest' as a workaround for
 // <https://github.com/joyent/node-docker-registry-client/issues/12>.
-const TAG = 'v1.9.7';
+const TAG = 'v3.6.6-amd64';
 
 // --- Tests
 
@@ -57,11 +57,11 @@ Deno.test('v2 quay.io / ping', async () => {
     */
 Deno.test('v2 quay.io / listTags', async () => {
     const client = new RegistryClientV2({ repo });
-    const tag = "latest"; // pagination is broken so this might need to change over time
     const tags = await client.listTags();
     assertEquals(tags.name, repo.remoteName);
-    assert(tags.tags.indexOf(tag) !== -1,
-        'tag "'+tag+'" in listTags:' + JSON.stringify(tags));
+    const TAG = 'v3.0.11'; // TODO: remove after pagination
+    assert(tags.tags.indexOf(TAG) !== -1,
+        'tag "'+TAG+'" in listTags:' + JSON.stringify(tags));
 });
 
 /*
@@ -78,20 +78,20 @@ Deno.test('v2 quay.io / listTags', async () => {
     *      "signature": <JWS>
     *  }
     */
-let _manifest: ManifestV2 | null;
+let _manifest: ManifestOCI | null;
 let _manifestDigest: string | null;
 Deno.test('v2 quay.io / getManifest', async () => {
     const client = new RegistryClientV2({ repo });
-    const {manifest, resp} = await client.getManifest({ref: TAG});
+    const {manifest, resp} = await client.getManifest({ref: TAG, acceptOCIManifests: true});
     _manifestDigest = resp.headers.get('docker-content-digest');
     assert(manifest);
     assertEquals(manifest.schemaVersion, 2);
     assert(manifest.schemaVersion === 2);
-    assertEquals(manifest.mediaType, MEDIATYPE_MANIFEST_V2);
-    assert(manifest.mediaType === MEDIATYPE_MANIFEST_V2);
+    assertEquals(manifest.mediaType, MEDIATYPE_OCI_MANIFEST_V1);
+    assert(manifest.mediaType === MEDIATYPE_OCI_MANIFEST_V1);
     _manifest = manifest ?? null;
     assert(manifest.layers);
-    assertEquals(manifest.layers?.[0].mediaType, "application/vnd.docker.image.rootfs.diff.tar.gzip");
+    assertEquals(manifest.layers?.[0].mediaType, "application/vnd.oci.image.layer.v1.tar+gzip");
 });
 
 Deno.test('v2 quay.io / getManifest (by digest)', async () => {
@@ -101,7 +101,7 @@ Deno.test('v2 quay.io / getManifest (by digest)', async () => {
     assert(manifest);
     assertEquals(_manifest.schemaVersion, manifest.schemaVersion);
     assert(manifest.schemaVersion === 2);
-    assert(manifest.mediaType === MEDIATYPE_MANIFEST_V2);
+    assert(manifest.mediaType === MEDIATYPE_OCI_MANIFEST_V1);
     assertEquals(_manifest.mediaType, manifest.mediaType);
     assertEquals(_manifest.config.digest, manifest.config.digest);
     assertEquals(_manifest.layers?.[0].digest, manifest.layers[0].digest);
@@ -203,9 +203,7 @@ Deno.test('v2 quay.io / createBlobReadStream', async () => {
     const last = ress.slice(-1)[0];
     assert(last, 'got a stream');
     assertEquals(last.status, 200);
-    // Quay.io gives `Content-Type: binary/octet-stream` which has to
-    // be a bug. AFAIK that isn't a real MIME type. Should be application/octet-stream
-    assertEquals(last.headers.get('content-type'), 'binary/octet-stream');
+    assertEquals(last.headers.get('content-type'), 'application/octet-stream');
     assert(last.headers.get('content-length') !== undefined,
         'got a "content-length" header');
 

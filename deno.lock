@@ -1,0 +1,16 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@std/crypto@^1.0.5": "1.0.5"
+  },
+  "jsr": {
+    "@std/crypto@1.0.5": {
+      "integrity": "0dcfbb319fe0bba1bd3af904ceb4f948cde1b92979ec1614528380ed308a3b40"
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@std/crypto@^1.0.5"
+    ]
+  }
+}

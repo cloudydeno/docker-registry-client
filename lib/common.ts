@@ -23,7 +23,7 @@ export const MEDIATYPE_OCI_MANIFEST_INDEX_V1
 // --- globals
 
 // var VERSION = require('../package.json').version;
-import jsr from '../jsr.json' with {type: 'json'};
+import jsr from '../deno.json' with {type: 'json'};
 const innerBits = [`Deno/${Deno.version.deno}`];
 if (import.meta.url.startsWith('http')) {
     innerBits.unshift(`+${import.meta.url}`);

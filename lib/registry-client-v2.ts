@@ -21,11 +21,11 @@ import type {
     AuthInfo,
     TagList,
 } from "./types.ts";
-import { DockerJsonClient, DockerResponse } from "./docker-json-client.ts";
+import { DockerJsonClient, type DockerResponse } from "./docker-json-client.ts";
 import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
 import * as e from "./errors.ts";
 
-import { crypto } from "jsr:@std/crypto@1.0.4";
+import { crypto } from "@std/crypto";
 function encodeHex(data: ArrayBuffer) {
   return [...new Uint8Array(data)]
     .map(x => x.toString(16).padStart(2, '0'))
@@ -240,7 +240,7 @@ function _parseDockerContentDigest(dcd: string) {
         algorithm: parts[0],
         expectedDigest: parts[1],
         async runHash(inStream: ReadableStream<Uint8Array>) { switch (this.algorithm) {
-            case 'sha256': return await crypto.subtle.digest("SHA-256", inStream as ReadableStream<Uint8Array<ArrayBuffer>>);
+            case 'sha256': return await crypto.subtle.digest("SHA-256", inStream as ReadableStream<BufferSource>);
             default: throw new e.BadDigestError(`Unsupported hash algorithm ${this.algorithm}`);
         } },
         validateStream(inStream: ReadableStream<Uint8Array>) {

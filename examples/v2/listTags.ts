@@ -30,5 +30,5 @@ const client = new RegistryClientV2({
     username: opts.username,
     password: opts.password
 });
-const tags = await client.listTags();
+const tags = await client.listAllTags();
 console.log(JSON.stringify(tags, null, 4));

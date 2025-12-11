@@ -4,6 +4,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+import { crypto } from "@std/crypto";
+
 import {
     parseRepo,
     urlFromIndex,
@@ -22,10 +24,11 @@ import type {
     TagList,
 } from "./types.ts";
 import { DockerJsonClient, type DockerResponse } from "./docker-json-client.ts";
-import { Parse_WWW_Authenticate } from "./www-authenticate.ts";
 import * as e from "./errors.ts";
 
-import { crypto } from "@std/crypto";
+import { parseWWWAuthenticate } from "./util/www-authenticate.ts";
+import { parseLinkHeader } from "./util/link-header.ts";
+
 function encodeHex(data: ArrayBuffer) {
   return [...new Uint8Array(data)]
     .map(x => x.toString(16).padStart(2, '0'))
@@ -187,34 +190,6 @@ async function registryError(err: any, res: DockerResponse) {
     return Promise.reject(err);
 }
 
-/**
- * Parse a WWW-Authenticate header like this:
- *
- *      // JSSTYLED
- *      www-authenticate: Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
- *      www-authenticate: Basic realm="registry456.example.com"
- *
- * into an object like this:
- *
- *      {
- *          scheme: 'Bearer',
- *          parms: {
- *              realm: 'https://auth.docker.io/token',
- *              service: 'registry.docker.io'
- *          }
- *      }
- *
- * Note: This doesn't handle *multiple* challenges. I've not seen a concrete
- * example of that.
- */
-function _parseWWWAuthenticate(header: string) {
-    const parsed = new Parse_WWW_Authenticate(header);
-    if (parsed.err) {
-        throw new Error('could not parse WWW-Authenticate header "' + header
-            + '": ' + parsed.err);
-    }
-    return parsed;
-}
 
 /*
  * Parse the 'Docker-Content-Digest' header.
@@ -315,8 +290,8 @@ export class RegistryClientV2 {
             this.repo = parseRepo(opts.name);
         } else throw new Error(`name or repo required`);
 
-        this.acceptOCIManifests = opts.acceptOCIManifests || false;
-        this.acceptManifestLists = opts.acceptManifestLists || false;
+        this.acceptOCIManifests = opts.acceptOCIManifests ?? true;
+        this.acceptManifestLists = opts.acceptManifestLists ?? false;
         this.username = opts.username;
         this.password = opts.password;
         this.scopes = opts.scopes ?? ['pull'];
@@ -424,7 +399,7 @@ export class RegistryClientV2 {
             'missing WWW-Authenticate header from "GET /v2/" (see ' +
             'https://docs.docker.com/registry/spec/api/#api-version-check)');
 
-        const authChallenge = _parseWWWAuthenticate(chalHeader);
+        const authChallenge = parseWWWAuthenticate(chalHeader);
         if (authChallenge.scheme.toLowerCase() === 'basic') return {
             type: 'Basic',
             username: this.username ?? '',
@@ -572,16 +547,47 @@ export class RegistryClientV2 {
         return [200, 401].includes(res.status);
     };
 
-    // TODO: pagination of some kind
-    async listTags(): Promise<TagList> {
+    async listTags(props: {pageSize?: number; startingAfter?: string} = {}): Promise<TagList> {
+        const searchParams = new URLSearchParams();
+        if (props.pageSize != null) searchParams.set('n', `${props.pageSize}`);
+        if (props.startingAfter != null) searchParams.set('last', props.startingAfter);
+
         await this.login();
         const res = await this._api.request({
             method: 'GET',
             path: `/v2/${encodeURI(this.repo.remoteName)}/tags/list`,
             headers: this._headers,
-            redirect: 'follow',
         });
         return await res.dockerJson<TagList>();
+    };
+
+    async listAllTags(props: {pageSize?: number} = {}): Promise<TagList> {
+        const pages = await Array.fromAsync(this.listTagsPaginated(props));
+        const firstPage = pages.shift()!;
+        for (const nextPage of pages) {
+            firstPage.tags = [...firstPage.tags, ...nextPage.tags];
+        }
+        return firstPage;
+    };
+
+    async *listTagsPaginated(props: {pageSize?: number} = {}): AsyncGenerator<TagList> {
+        await this.login();
+        let path: string | null = `/v2/${encodeURI(this.repo.remoteName)}/tags/list`;
+        if (props.pageSize != null) {
+            path += `?n=${props.pageSize}`;
+        }
+        while (path) {
+            const res = await this._api.request({
+                method: 'GET',
+                path,
+                headers: this._headers,
+            });
+            const links = parseLinkHeader(res.headers.get('link'));
+            const nextLink = links.find(x => x.rel == 'next');
+            // If there's no next link then we use a null to end the loop.
+            path = nextLink?.url ?? null;
+            yield await res.dockerJson<TagList>();
+        }
     };
 
     /*
@@ -812,7 +818,7 @@ export class RegistryClientV2 {
     };
 
     /*
-    * Upload a blob. The request stream will be used to  complete the upload in a single request.
+    * Upload a blob. The request stream will be used to complete the upload in a single request.
     * <https://github.com/opencontainers/distribution-spec/blob/main/spec.md#post-then-put>
     */
     async blobUpload(opts: {

@@ -1,9 +1,12 @@
 # @cloudydeno/docker-registry-client Changelog
 
 ## Unreleased
-- Update test expectations for registry updates
+- Change default value of `acceptOCIManifests` option to `true`
+- Add `listAllTags` method which chases pagination
+  - Also add `listTagsPaginated` generator for streaming processing of tags
+- Update test expectations for registry-side changes
 - Use Deno workspaces so examples and tests include the real imports
-- Replace remaining https:// deps for tests and examples with JSR deps
+  - Replace remaining https:// deps for tests and examples with JSR deps
 
 ## 0.6.1
 - Fix incompatibility with Google Artifact Registry

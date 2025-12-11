@@ -11,6 +11,7 @@ import type { DockerResponse as DockerResponseInterface } from "./types.ts";
 interface HttpReqOpts {
     method: string;
     path: string;
+    searchParams?: URLSearchParams;
     headers?: Headers;
     body?: BodyInit;
     retry?: boolean;
@@ -51,8 +52,13 @@ export class DockerJsonClient {
         }
         headers.set('user-agent', this.userAgent);
 
-        const rawResp = await fetch(new URL(opts.path, this.url), {
-            client: this.client as Deno.HttpClient, // optionalability is weird
+        const url = new URL(opts.path, this.url);
+        for (const param of opts.searchParams ?? []) {
+            url.searchParams.append(param[0], param[1]);
+        }
+
+        const rawResp = await fetch(url, {
+            client: this.client,
             method: opts.method,
             headers: headers,
             redirect: opts.redirect ?? 'manual',

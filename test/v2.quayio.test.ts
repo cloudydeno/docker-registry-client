@@ -23,8 +23,6 @@ import { ManifestOCI } from "@cloudydeno/docker-registry-client/types";
 
 const REPO = 'quay.io/coreos/etcd';
 const repo = parseRepo(REPO);
-// Note: Not using TAG='latest' as a workaround for
-// <https://github.com/joyent/node-docker-registry-client/issues/12>.
 const TAG = 'v3.6.6-amd64';
 
 // --- Tests
@@ -55,13 +53,12 @@ Deno.test('v2 quay.io / ping', async () => {
     *      "tags": [ "2.6", "2.7", "3.1", "3.2", "edge", "latest" ]
     *  }
     */
-Deno.test('v2 quay.io / listTags', async () => {
+Deno.test('v2 quay.io / listAllTags', async () => {
     const client = new RegistryClientV2({ repo });
-    const tags = await client.listTags();
+    const tags = await client.listAllTags();
     assertEquals(tags.name, repo.remoteName);
-    const TAG = 'v3.0.11'; // TODO: remove after pagination
     assert(tags.tags.indexOf(TAG) !== -1,
-        'tag "'+TAG+'" in listTags:' + JSON.stringify(tags));
+        'tag "'+TAG+'" in listAllTags:' + JSON.stringify(tags));
 });
 
 /*

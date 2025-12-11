@@ -3,6 +3,7 @@
 # `@cloudydeno/docker-registry-client`
 
 A Deno-oriented port of a Docker Registry API V2 client.
+Also compatible with OCI repositories via the [Opencontainers Distribution spec](https://github.com/opencontainers/distribution-spec/blob/main/spec.md).
 
 * Typescript, async/await, Promises, `fetch()`
 * Covers most APIs: pull, push, list, delete
@@ -14,11 +15,12 @@ A Deno-oriented port of a Docker Registry API V2 client.
 
 ## Credentials
 
-How to authenticate to particular registries:
+Authentication is performed with a username+password combination.
+For registries which use token-based auth, supply credentials like so:
 
 * Github:
     * username `$USERNAME` or similar
-        * like with Github API, username is not validated, you can use whatever
+        * like with Github API, the username is not checked -- a static value should be fine.
     * password `$GITHUB_TOKEN`
 * AWS ECR:
     * you need AWS auth even for 'public' images
@@ -36,7 +38,7 @@ specific *repository* and calling its methods.
 Simple usage will look like this:
 
 ```typescript
-import { RegistryClientV2 } from 'jsr:@cloudydeno/docker-registry-client';
+import { RegistryClientV2 } from '@cloudydeno/docker-registry-client';
 const REPO = 'alpine';
 const client = new RegistryClientV2({name: REPO});
 
@@ -47,7 +49,7 @@ console.log(JSON.stringify(tags, null, 4));
 If you need to authenticate, the `RegistryClientV2` call might look more like this:
 
 ```typescript
-import { RegistryClientV2 } from 'jsr:@cloudydeno/docker-registry-client';
+import { RegistryClientV2 } from '@cloudydeno/docker-registry-client';
 
 const client = new RegistryClientV2({
     name: 'alpine',

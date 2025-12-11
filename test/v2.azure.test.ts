@@ -43,9 +43,9 @@ Deno.test('v2 mcr.microsoft.com / ping', async () => {
     // assert(res.headers.get('www-authenticate'));
 });
 
-Deno.test('v2 mcr.microsoft.com / listTags', async () => {
+Deno.test('v2 mcr.microsoft.com / listAllTags', async () => {
     const client = new RegistryClientV2({ repo });
-    const tags = await client.listTags();
+    const tags = await client.listAllTags();
     assert(tags);
     assertEquals(tags.name, repo.remoteName);
     assert(tags.tags.indexOf(TAG) !== -1, 'no "'+TAG+'" tag');

@@ -20,7 +20,7 @@ import { ManifestOCIIndex } from "@cloudydeno/docker-registry-client/types";
 
 // --- globals
 
-const REPO = 'busybox';
+const REPO = 'alpine';
 const TAG = 'latest';
 
 // --- Tests
@@ -48,9 +48,9 @@ Deno.test('v2 docker.io / ping', async () => {
     *      "tags": [ "2.6", "2.7", "3.1", "3.2", "edge", "latest" ]
     *  }
     */
-Deno.test('v2 docker.io / listTags', async () => {
+Deno.test('v2 docker.io / listAllTags', async () => {
     const client = new RegistryClientV2({ repo });
-    const tags = await client.listTags();
+    const tags = await client.listAllTags();
     assert(tags);
     assertEquals(tags.name, repo.remoteName);
     assert(tags.tags.indexOf(TAG) !== -1, 'no "'+TAG+'" tag');

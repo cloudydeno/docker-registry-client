@@ -55,9 +55,9 @@ Deno.test('v2 registry.gitlab.com / ping', async () => {
     *      "tags": [ "2.6", "2.7", "3.1", "3.2", "edge", "latest" ]
     *  }
     */
-Deno.test('v2 registry.gitlab.com / listTags', async () => {
+Deno.test('v2 registry.gitlab.com / listAllTags', async () => {
     const client = new RegistryClientV2({ repo });
-    const tags = await client.listTags();
+    const tags = await client.listAllTags();
     assert(tags);
     assertEquals(tags.name, repo.remoteName);
     assert(tags.tags.indexOf(TAG) !== -1, 'have a "'+TAG+'" tag');

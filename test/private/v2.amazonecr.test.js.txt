@@ -71,8 +71,8 @@ test('v2 amazonecr', function (tt) {
     /*
      * Test that we need to be logged in to list repo tags.
      */
-    tt.test('  listTags (no auth)', function (t) {
-        noauthClient.listTags(function (err) {
+    tt.test('  listAllTags (no auth)', function (t) {
+        noauthClient.listAllTags(function (err) {
             t.ok(err);
             t.equal(err.statusCode, 401, 'Expect a 401 status code');
             t.equal(String(err.message).trim(), 'Not Authorized');
@@ -103,8 +103,8 @@ test('v2 amazonecr', function (tt) {
      *      "tags": [ "2.6", "2.7", "3.1", "3.2", "edge", "latest" ]
      *  }
      */
-    tt.test('  listTags', function (t) {
-        client.listTags(function (err, tags) {
+    tt.test('  listAllTags', function (t) {
+        client.listAllTags(function (err, tags) {
             t.ifErr(err);
             t.ok(tags);
             t.equal(tags.name, repo.remoteName);

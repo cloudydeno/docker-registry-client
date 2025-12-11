@@ -5,6 +5,7 @@
 - Add `listAllTags` method which chases pagination
   - Also add `listTagsPaginated` generator for streaming processing of tags
 - Update test expectations for registry-side changes
+- Test only on Deno v2.2+
 - Use Deno workspaces so examples and tests include the real imports
   - Replace remaining https:// deps for tests and examples with JSR deps
 

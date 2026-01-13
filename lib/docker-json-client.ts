@@ -149,6 +149,7 @@ export class DockerResponse extends Response implements DockerResponseInterface 
 
     dockerStream(): ReadableStream<ByteArray> {
         if (!this.body) throw new Error(`No body to stream`);
-        return this.body;
+        // TODO: Backwards compat for Deno 2.4 and earlier, remove cast eventually
+        return this.body as ReadableStream<ByteArray>;
     }
 }

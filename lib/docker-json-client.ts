@@ -4,7 +4,7 @@
  */
 
 import { HttpError } from "./errors.ts";
-import type { DockerResponse as DockerResponseInterface } from "./types.ts";
+import type { ByteArray, DockerResponse as DockerResponseInterface } from "./types.ts";
 
 // --- API
 
@@ -82,9 +82,9 @@ export class DockerJsonClient {
 
 export class DockerResponse extends Response implements DockerResponseInterface {
     // Cache the body once we decode it once.
-    decodedBody?: Uint8Array;
+    decodedBody?: ByteArray;
 
-    async dockerBody(): Promise<Uint8Array> {
+    async dockerBody(): Promise<ByteArray> {
         this.decodedBody ??= new Uint8Array(await this.arrayBuffer());
         return this.decodedBody;
     }
@@ -147,8 +147,9 @@ export class DockerResponse extends Response implements DockerResponseInterface 
         }
     }
 
-    dockerStream(): ReadableStream<Uint8Array> {
+    dockerStream(): ReadableStream<ByteArray> {
         if (!this.body) throw new Error(`No body to stream`);
-        return this.body;
+        // TODO: Backwards compat for Deno 2.4 and earlier, remove cast eventually
+        return this.body as ReadableStream<ByteArray>;
     }
 }

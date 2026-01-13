@@ -1,6 +1,6 @@
 {
   "name": "@cloudydeno/docker-registry-client",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "license": "MPL",
   "imports": {
     "@std/crypto": "jsr:@std/crypto@^1.0.5"

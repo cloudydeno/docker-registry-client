@@ -1,3 +1,5 @@
+/** An alias for Uint8Array now that Typescript 5.7 */
+export type ByteArray = Uint8Array<ArrayBuffer>;
 
 export interface RegistryIndex {
   name: string;
@@ -144,9 +146,9 @@ export type AuthInfo =
 
 
 export interface DockerResponse extends Response {
-  dockerBody(): Promise<Uint8Array>;
+  dockerBody(): Promise<ByteArray>;
   dockerJson(): Promise<unknown>;
-  dockerStream(): ReadableStream<Uint8Array>;
+  dockerStream(): ReadableStream<ByteArray>;
 
   dockerErrors(): Promise<Array<RegistryError>>;
   dockerThrowable(baseMsg: string): Promise<Error>;

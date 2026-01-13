@@ -13,7 +13,6 @@ jobs:
     strategy:
       matrix:
         deno-version:
-        - v2.2
         - v2.3
         - v2.4
         - v2.5
@@ -35,9 +34,6 @@ jobs:
       with:
         path: ~/.cache/deno
         key: denodir/${{ matrix.deno-version }}-${{ hashFiles('deno.lock') }}
-
-    - name: Possibly reset lockfile
-      run: deno install || rm deno.lock
 
     - name: Check index.ts
       run: deno check ./lib/index.ts
@@ -81,9 +77,15 @@ jobs:
       id-token: write
 
     steps:
+    - uses: actions/checkout@v6
+
     - uses: denoland/setup-deno@v2
 
-    - uses: actions/checkout@v6
+    - name: Cache Deno deps
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/deno
+        key: denodir-${{ hashFiles('deno.lock') }}
 
     - name: Publish now
       run: deno publish

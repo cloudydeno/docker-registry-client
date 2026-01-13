@@ -22,6 +22,7 @@ import type {
     RegistryClientOpts,
     AuthInfo,
     TagList,
+    ByteArray,
 } from "./types.ts";
 import { DockerJsonClient, type DockerResponse } from "./docker-json-client.ts";
 import * as e from "./errors.ts";
@@ -214,11 +215,11 @@ function _parseDockerContentDigest(dcd: string) {
         raw: dcd,
         algorithm: parts[0],
         expectedDigest: parts[1],
-        async runHash(inStream: ReadableStream<Uint8Array>) { switch (this.algorithm) {
+        async runHash(inStream: ReadableStream<ByteArray>) { switch (this.algorithm) {
             case 'sha256': return await crypto.subtle.digest("SHA-256", inStream as ReadableStream<BufferSource>);
             default: throw new e.BadDigestError(`Unsupported hash algorithm ${this.algorithm}`);
         } },
-        validateStream(inStream: ReadableStream<Uint8Array>) {
+        validateStream(inStream: ReadableStream<ByteArray>) {
             const [passthru, hashStream] = inStream.tee();
             const hashPromise = this.runHash(hashStream);
             return passthru.pipeThrough(new TransformStream({
@@ -762,7 +763,7 @@ export class RegistryClientV2 {
         digest: string;
     }): Promise<{
         ress: DockerResponse[];
-        stream: ReadableStream<Uint8Array>;
+        stream: ReadableStream<ByteArray>;
     }> {
         const ress = await this._headOrGetBlob('GET', opts.digest);
         let stream = ress[ress.length - 1].dockerStream();
@@ -787,7 +788,7 @@ export class RegistryClientV2 {
     * <https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pushing-manifests>
     */
     async putManifest(opts: {
-        manifestData: Uint8Array;
+        manifestData: ByteArray;
         ref: string; // or digest
         schemaVersion?: number;
         mediaType?: string;
@@ -823,7 +824,7 @@ export class RegistryClientV2 {
     */
     async blobUpload(opts: {
         digest: string;
-        stream: ReadableStream<Uint8Array> | Uint8Array;
+        stream: ReadableStream<ByteArray> | ByteArray;
         contentLength: number;
         contentType?: string;
     }) {

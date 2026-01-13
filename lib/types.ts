@@ -1,5 +1,5 @@
-/** An alias for Uint8Array now that Typescript 5.7 */
-export type ByteArray = Uint8Array<ArrayBuffer>;
+/** An alias for Uint8Array<ArrayBuffer> for Typescript 5.7 */
+export type ByteArray = ReturnType<Uint8Array["slice"]>;
 
 export interface RegistryIndex {
   name: string;
